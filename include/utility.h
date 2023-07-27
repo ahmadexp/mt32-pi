@@ -2,7 +2,7 @@
 // utility.h
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -59,6 +59,12 @@ namespace Utility
 	constexpr T Max(const T& nLHS, const T& nRHS)
 	{
 		return nLHS > nRHS ? nLHS : nRHS;
+	}
+
+	// Function for performing a linear interpolation of a value
+	constexpr float Lerp(float nValue, float nMinA, float nMaxA, float nMinB, float nMaxB)
+	{
+		return nMinB + (nValue - nMinA) * ((nMaxB - nMinB) / (nMaxA - nMinA));
 	}
 
 	// Return number of elements in an array

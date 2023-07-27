@@ -2,7 +2,7 @@
 // soundfontsynth.cpp
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -33,7 +33,7 @@
 #include "utility.h"
 #include "zoneallocator.h"
 
-const char SoundFontSynthName[] = "soundfontsynth";
+LOGMODULE("soundfontsynth");
 const char SoundFontPath[] = "soundfonts";
 
 extern "C"
@@ -129,16 +129,15 @@ extern "C"
 	}
 }
 
-CSoundFontSynth::CSoundFontSynth(unsigned nSampleRate, float nGain, u32 nPolyphony)
+CSoundFontSynth::CSoundFontSynth(unsigned nSampleRate)
 	: CSynthBase(nSampleRate),
 
 	  m_pSettings(nullptr),
 	  m_pSynth(nullptr),
 
-	  m_nInitialGain(nGain),
-	  m_nCurrentGain(nGain),
+	  m_nVolume(100),
+	  m_nInitialGain(0.2f),
 
-	  m_nPolyphony(nPolyphony),
 	  m_nPercussionMask(1 << 9),
 	  m_nCurrentSoundFontIndex(0)
 {
@@ -155,7 +154,7 @@ CSoundFontSynth::~CSoundFontSynth()
 
 void CSoundFontSynth::FluidSynthLogCallback(int nLevel, const char* pMessage, void* pUser)
 {
-	CLogger::Get()->Write(SoundFontSynthName, static_cast<TLogSeverity>(nLevel), pMessage);
+	CLogger::Get()->Write(From, static_cast<TLogSeverity>(nLevel), pMessage);
 }
 
 bool CSoundFontSynth::Initialize()
@@ -180,6 +179,8 @@ bool CSoundFontSynth::Initialize()
 	if (!pSoundFontPath)
 		return false;
 
+	TFXProfile FXProfile = m_SoundFontManager.GetSoundFontFXProfile(m_nCurrentSoundFontIndex);
+
 	// Install logging handlers
 	fluid_set_log_function(FLUID_PANIC, FluidSynthLogCallback, this);
 	fluid_set_log_function(FLUID_ERR, FluidSynthLogCallback, this);
@@ -190,7 +191,7 @@ bool CSoundFontSynth::Initialize()
 	m_pSettings = new_fluid_settings();
 	if (!m_pSettings)
 	{
-		CLogger::Get()->Write(SoundFontSynthName, LogError, "Failed to create settings");
+		LOGERR("Failed to create settings");
 		return false;
 	}
 
@@ -199,7 +200,7 @@ bool CSoundFontSynth::Initialize()
 	fluid_settings_setnum(m_pSettings, "synth.sample-rate", static_cast<double>(m_nSampleRate));
 	fluid_settings_setint(m_pSettings, "synth.threadsafe-api", false);
 
-	return Reinitialize(pSoundFontPath, &pConfig->FXProfiles[m_nCurrentSoundFontIndex]);
+	return Reinitialize(pSoundFontPath, &FXProfile);
 }
 
 void CSoundFontSynth::HandleMIDIShortMessage(u32 nMessage)
@@ -298,9 +299,9 @@ void CSoundFontSynth::AllSoundOff()
 
 void CSoundFontSynth::SetMasterVolume(u8 nVolume)
 {
-	m_nCurrentGain = nVolume / 100.0f * m_nInitialGain;
+	m_nVolume = nVolume;
 	m_Lock.Acquire();
-	fluid_synth_set_gain(m_pSynth, m_nCurrentGain);
+	fluid_synth_set_gain(m_pSynth, m_nVolume / 100.0f * m_nInitialGain);
 	m_Lock.Release();
 }
 
@@ -356,8 +357,10 @@ bool CSoundFontSynth::SwitchSoundFont(size_t nIndex)
 	if (m_pUI)
 		m_pUI->ShowSystemMessage("Loading SoundFont", true);
 
+	TFXProfile FXProfile = m_SoundFontManager.GetSoundFontFXProfile(nIndex);
+
 	// We can't use fluid_synth_sfunload() as we don't support the lazy SoundFont unload timer, so trash the entire synth and create a new one
-	if (!Reinitialize(pSoundFontPath, &CConfig::Get()->FXProfiles[nIndex]))
+	if (!Reinitialize(pSoundFontPath, &FXProfile))
 	{
 		if (m_pUI)
 			m_pUI->ShowSystemMessage("SF switch failed!");
@@ -367,7 +370,7 @@ bool CSoundFontSynth::SwitchSoundFont(size_t nIndex)
 
 	m_nCurrentSoundFontIndex = nIndex;
 
-	CLogger::Get()->Write(SoundFontSynthName, LogNotice, "Loaded \"%s\"", m_SoundFontManager.GetSoundFontName(nIndex));
+	LOGNOTE("Loaded \"%s\"", m_SoundFontManager.GetSoundFontName(nIndex));
 	if (m_pUI)
 		m_pUI->ClearSpinnerMessage();
 
@@ -377,7 +380,6 @@ bool CSoundFontSynth::SwitchSoundFont(size_t nIndex)
 bool CSoundFontSynth::Reinitialize(const char* pSoundFontPath, const TFXProfile* pFXProfile)
 {
 	const CConfig* const pConfig = CConfig::Get();
-	CLogger* const pLogger = CLogger::Get();
 
 	m_Lock.Acquire();
 
@@ -389,12 +391,14 @@ bool CSoundFontSynth::Reinitialize(const char* pSoundFontPath, const TFXProfile*
 	if (!m_pSynth)
 	{
 		m_Lock.Release();
-		pLogger->Write(SoundFontSynthName, LogError, "Failed to create synth");
+		LOGERR("Failed to create synth");
 		return false;
 	}
 
-	fluid_synth_set_gain(m_pSynth, m_nCurrentGain);
-	fluid_synth_set_polyphony(m_pSynth, m_nPolyphony);
+	fluid_synth_set_polyphony(m_pSynth, pConfig->FluidSynthPolyphony);
+
+	m_nInitialGain = pFXProfile->nGain.ValueOr(pConfig->FluidSynthDefaultGain);
+	fluid_synth_set_gain(m_pSynth, m_nVolume / 100.0f * m_nInitialGain);
 
 	// Use values from effects profile if set, otherwise use defaults
 	fluid_synth_reverb_on(m_pSynth, -1, pFXProfile->bReverbActive.ValueOr(pConfig->FluidSynthDefaultReverbActive));
@@ -403,7 +407,7 @@ bool CSoundFontSynth::Reinitialize(const char* pSoundFontPath, const TFXProfile*
 	fluid_synth_set_reverb_group_roomsize(m_pSynth, -1, pFXProfile->nReverbRoomSize.ValueOr(pConfig->FluidSynthDefaultReverbRoomSize));
 	fluid_synth_set_reverb_group_width(m_pSynth, -1, pFXProfile->nReverbWidth.ValueOr(pConfig->FluidSynthDefaultReverbWidth));
 
-	fluid_synth_chorus_on(m_pSynth, -1,	pFXProfile->bChorusActive.ValueOr(pConfig->FluidSynthDefaultChorusActive));
+	fluid_synth_chorus_on(m_pSynth, -1, pFXProfile->bChorusActive.ValueOr(pConfig->FluidSynthDefaultChorusActive));
 	fluid_synth_set_chorus_group_depth(m_pSynth, -1, pFXProfile->nChorusDepth.ValueOr(pConfig->FluidSynthDefaultChorusDepth));
 	fluid_synth_set_chorus_group_level(m_pSynth, -1, pFXProfile->nChorusLevel.ValueOr(pConfig->FluidSynthDefaultChorusLevel));
 	fluid_synth_set_chorus_group_nr(m_pSynth, -1, pFXProfile->nChorusVoices.ValueOr(pConfig->FluidSynthDefaultChorusVoices));
@@ -421,12 +425,12 @@ bool CSoundFontSynth::Reinitialize(const char* pSoundFontPath, const TFXProfile*
 
 	if (fluid_synth_sfload(m_pSynth, pSoundFontPath, true) == FLUID_FAILED)
 	{
-		pLogger->Write(SoundFontSynthName, LogError, "Failed to load SoundFont");
+		LOGERR("Failed to load SoundFont");
 		return false;
 	}
 
 	const float nLoadTime = (CTimer::GetClockTicks() - nLoadStart) / 1000000.0f;
-	pLogger->Write(SoundFontSynthName, TLogSeverity::LogNotice, "\"%s\" loaded in %0.2f seconds", pSoundFontPath, nLoadTime);
+	LOGNOTE("\"%s\" loaded in %0.2f seconds", pSoundFontPath, nLoadTime);
 
 	return true;
 }
@@ -441,9 +445,10 @@ void CSoundFontSynth::ResetMIDIMonitor()
 #ifndef NDEBUG
 void CSoundFontSynth::DumpFXSettings() const
 {
-	CLogger* const pLogger = CLogger::Get();
-	double nReverbDamping, nReverbLevel, nReverbRoomSize, nReverbWidth, nChorusDepth, nChorusLevel, nChorusSpeed;
+	double nGain, nReverbDamping, nReverbLevel, nReverbRoomSize, nReverbWidth, nChorusDepth, nChorusLevel, nChorusSpeed;
 	int nChorusVoices;
+
+	nGain = fluid_synth_get_gain(m_pSynth);
 
 	assert(fluid_synth_get_reverb_group_damp(m_pSynth, -1, &nReverbDamping) == FLUID_OK);
 	assert(fluid_synth_get_reverb_group_level(m_pSynth, -1, &nReverbLevel) == FLUID_OK);
@@ -455,16 +460,16 @@ void CSoundFontSynth::DumpFXSettings() const
 	assert(fluid_synth_get_chorus_group_nr(m_pSynth, -1, &nChorusVoices) == FLUID_OK);
 	assert(fluid_synth_get_chorus_group_speed(m_pSynth, -1, &nChorusSpeed) == FLUID_OK);
 
-	pLogger->Write(SoundFontSynthName, LogNotice,
-		"Reverb: %.2f, %.2f, %.2f, %.2f",
+	LOGNOTE("Gain: %.2f", nGain);
+
+	LOGNOTE("Reverb: %.2f, %.2f, %.2f, %.2f",
 		nReverbDamping,
 		nReverbLevel,
 		nReverbRoomSize,
 		nReverbWidth
 	);
 
-	pLogger->Write(SoundFontSynthName, LogNotice,
-		"Chorus: %.2f, %.2f, %d, %.2f",
+	LOGNOTE("Chorus: %.2f, %.2f, %d, %.2f",
 		nChorusDepth,
 		nChorusLevel,
 		nChorusVoices,

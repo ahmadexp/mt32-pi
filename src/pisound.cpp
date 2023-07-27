@@ -2,7 +2,7 @@
 // pisound.cpp
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -28,6 +28,8 @@
 
 #include "pisound.h"
 
+LOGMODULE("pisound");
+
 constexpr u8 SPIChipSelect        = 0;
 constexpr u8 SPIDelayMicroseconds = 10;
 constexpr u32 SPIClockSpeed       = 150000;
@@ -42,8 +44,6 @@ constexpr u8 GPIOOversamplingRatio2 = 16;
 
 constexpr u8 GPIOSPIReset         = 24;
 constexpr u8 GPIOSPIDataAvailable = 25;
-
-const char PisoundName[] = "pisound";
 
 // Based on: https://github.com/raspberrypi/linux/blob/rpi-5.4.y/sound/soc/bcm/pisound.c
 //           https://github.com/raspberrypi/linux/blob/rpi-5.4.y/arch/arm/boot/dts/overlays/pisound-overlay.dts
@@ -71,11 +71,20 @@ CPisound::CPisound(CSPIMaster* pSPIMaster, CGPIOManager* pGPIOManager, unsigned 
 {
 }
 
+CPisound::~CPisound()
+{
+	// Reset GPIO pins to default boot-up state
+	m_SPIReset.SetMode(TGPIOMode::GPIOModeInputPullDown);
+	m_DataAvailable.SetMode(TGPIOMode::GPIOModeInputPullDown);
+	m_ADCReset.SetMode(TGPIOMode::GPIOModeInputPullDown);
+	m_OversamplingRatio0.SetMode(TGPIOMode::GPIOModeInputPullDown);
+	m_OversamplingRatio1.SetMode(TGPIOMode::GPIOModeInputPullDown);
+	m_OversamplingRatio2.SetMode(TGPIOMode::GPIOModeInputPullDown);
+}
+
 bool CPisound::Initialize()
 {
 	assert(m_pSPIMaster != nullptr);
-
-	CLogger* const pLogger = CLogger::Get();
 
 	// Set the oversampling ratio pins
 	switch (m_nSamplerate)
@@ -117,10 +126,10 @@ bool CPisound::Initialize()
 	// Flash the LEDs
 	Transfer16(0xF008);
 
-	pLogger->Write(PisoundName, LogNotice, "Serial number: %s", m_SerialNumber);
-	pLogger->Write(PisoundName, LogNotice, "ID: %s", m_ID);
-	pLogger->Write(PisoundName, LogNotice, "Firmware version: %s", m_FirmwareVersion);
-	pLogger->Write(PisoundName, LogNotice, "Hardware version: %s", m_HardwareVersion);
+	LOGNOTE("Serial number: %s", m_SerialNumber);
+	LOGNOTE("ID: %s", m_ID);
+	LOGNOTE("Firmware version: %s", m_FirmwareVersion);
+	LOGNOTE("Hardware version: %s", m_HardwareVersion);
 
 	return true;
 }

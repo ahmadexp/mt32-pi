@@ -2,7 +2,7 @@
 // ftpworker.cpp
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -33,6 +33,9 @@
 
 #include "net/ftpworker.h"
 #include "utility.h"
+
+// Use a per-instance name for the log macros
+#define From m_LogName
 
 constexpr u16 PassivePortBase = 9000;
 constexpr size_t TextBufferSize = 512;
@@ -86,7 +89,8 @@ const TFTPCommand CFTPWorker::Commands[] =
 	{ "PWD",	&CFTPWorker::PrintWorkingDirectory	},
 	{ "LIST",	&CFTPWorker::List			},
 	{ "NLST",	&CFTPWorker::ListFileNames		},
-	{ "RD",		&CFTPWorker::RemoveDirectory		},
+	{ "RNFR",	&CFTPWorker::RenameFrom			},
+	{ "RNTO",	&CFTPWorker::RenameTo			},
 	{ "BYE",	&CFTPWorker::Bye			},
 	{ "QUIT",	&CFTPWorker::Bye			},
 	{ "NOOP",	&CFTPWorker::NoOp			},
@@ -135,7 +139,8 @@ CFTPWorker::CFTPWorker(CSocket* pControlSocket, const char* pExpectedUser, const
 	  m_Password(),
 	  m_DataType(TDataType::ASCII),
 	  m_TransferMode(TTransferMode::Active),
-	  m_CurrentPath()
+	  m_CurrentPath(),
+	  m_RenameFrom()
 {
 	++s_nInstanceCount;
 	m_LogName.Format("ftpd[%d]", s_nInstanceCount);
@@ -151,7 +156,7 @@ CFTPWorker::~CFTPWorker()
 
 	--s_nInstanceCount;
 
-	CLogger::Get()->Write(m_LogName, LogNotice, "Instance count is now %d", s_nInstanceCount);
+	LOGNOTE("Instance count is now %d", s_nInstanceCount);
 }
 
 void CFTPWorker::Run()
@@ -159,10 +164,9 @@ void CFTPWorker::Run()
 	assert(m_pControlSocket != nullptr);
 
 	const size_t nWorkerNumber = s_nInstanceCount;
-	CLogger* const pLogger       = CLogger::Get();
 	CScheduler* const pScheduler = CScheduler::Get();
 
-	pLogger->Write(m_LogName, LogNotice, "Worker task %d spawned", nWorkerNumber);
+	LOGNOTE("Worker task %d spawned", nWorkerNumber);
 
 	if (!SendStatus(TFTPStatus::ReadyForNewUser, MOTDBanner))
 		return;
@@ -174,7 +178,7 @@ void CFTPWorker::Run()
 	{
 		// Block while waiting to receive
 #ifdef FTPDAEMON_DEBUG
-		pLogger->Write(m_LogName, LogDebug, "Waiting for command");
+		LOGDBG("Waiting for command");
 #endif
 		const int nReceiveBytes = m_pControlSocket->Receive(m_CommandBuffer, sizeof(m_CommandBuffer), MSG_DONTWAIT);
 
@@ -182,7 +186,7 @@ void CFTPWorker::Run()
 		{
 			if (pTimer->GetTicks() - nTimeout >= SocketTimeout * HZ)
 			{
-				CLogger::Get()->Write(m_LogName, LogError, "Socket timed out");
+				LOGERR("Socket timed out");
 				break;
 			}
 
@@ -192,7 +196,7 @@ void CFTPWorker::Run()
 
 		if (nReceiveBytes < 0)
 		{
-			pLogger->Write(m_LogName, LogNotice, "Connection closed");
+			LOGNOTE("Connection closed");
 			break;
 		}
 
@@ -201,7 +205,7 @@ void CFTPWorker::Run()
 
 #ifdef FTPDAEMON_DEBUG
 		const u8* pIPAddress = m_pControlSocket->GetForeignIP();
-		pLogger->Write(m_LogName, LogDebug, "<-- Received %d bytes from %d.%d.%d.%d: '%s'", nReceiveBytes, pIPAddress[0], pIPAddress[1], pIPAddress[2], pIPAddress[3], m_CommandBuffer);
+		LOGDBG("<-- Received %d bytes from %d.%d.%d.%d: '%s'", nReceiveBytes, pIPAddress[0], pIPAddress[1], pIPAddress[2], pIPAddress[3], m_CommandBuffer);
 #endif
 
 		char* pSavePtr;
@@ -209,7 +213,7 @@ void CFTPWorker::Run()
 
 		if (!pToken)
 		{
-			pLogger->Write(m_LogName, LogError, "String tokenization error (received: '%s')", m_CommandBuffer);
+			LOGERR("String tokenization error (received: '%s')", m_CommandBuffer);
 			continue;
 		}
 
@@ -231,7 +235,7 @@ void CFTPWorker::Run()
 		nTimeout = pTimer->GetTicks();
 	}
 
-	pLogger->Write(m_LogName, LogNotice, "Worker task %d shutting down", nWorkerNumber);
+	LOGNOTE("Worker task %d shutting down", nWorkerNumber);
 
 	delete m_pControlSocket;
 	m_pControlSocket = nullptr;
@@ -277,7 +281,7 @@ CSocket* CFTPWorker::OpenDataConnection()
 
 	if (pDataSocket == nullptr)
 	{
-		CLogger::Get()->Write(m_LogName, LogError, "Unable to open data socket after %d attempts", NumRetries);
+		LOGERR("Unable to open data socket after %d attempts", NumRetries);
 		SendStatus(TFTPStatus::DataConnectionFailed, "Couldn't open data connection.");
 	}
 
@@ -287,19 +291,18 @@ CSocket* CFTPWorker::OpenDataConnection()
 bool CFTPWorker::SendStatus(TFTPStatus StatusCode, const char* pMessage)
 {
 	assert(m_pControlSocket != nullptr);
-	CLogger* pLogger = CLogger::Get();
 
 	const int nLength = snprintf(m_CommandBuffer, sizeof(m_CommandBuffer), "%d %s\r\n", StatusCode, pMessage);
 	if (m_pControlSocket->Send(m_CommandBuffer, nLength, 0) < 0)
 	{
-		pLogger->Write(m_LogName, LogError, "Failed to send status");
+		LOGERR("Failed to send status");
 		return false;
 	}
 #ifdef FTPDAEMON_DEBUG
 	else
 	{
 		m_CommandBuffer[nLength - 2] = '\0';
-		pLogger->Write(m_LogName, LogDebug, "--> Sent: '%s'", m_CommandBuffer);
+		LOGDBG("--> Sent: '%s'", m_CommandBuffer);
 	}
 #endif
 
@@ -308,6 +311,11 @@ bool CFTPWorker::SendStatus(TFTPStatus StatusCode, const char* pMessage)
 
 bool CFTPWorker::CheckLoggedIn()
 {
+#ifdef FTPDAEMON_DEBUG
+	LOGDBG("Username compare: expected '%s', actual '%s'", static_cast<const char*>(m_pExpectedUser), static_cast<const char*>(m_User));
+	LOGDBG("Password compare: expected '%s', actual '%s'", static_cast<const char*>(m_pExpectedPassword),  static_cast<const char*>(m_Password));
+#endif
+
 	if (m_User.Compare(m_pExpectedUser) == 0 && m_Password.Compare(m_pExpectedPassword) == 0)
 		return true;
 
@@ -499,7 +507,7 @@ bool CFTPWorker::Port(const char* pArgs)
 #ifdef FTPDAEMON_DEBUG
 	CString IPAddressString;
 	m_DataSocketIPAddress.Format(&IPAddressString);
-	CLogger::Get()->Write(m_LogName, LogDebug, "PORT set to: %s:%d", static_cast<const char*>(IPAddressString), m_nDataSocketPort);
+	LOGDBG("PORT set to: %s:%d", static_cast<const char*>(IPAddressString), m_nDataSocketPort);
 #endif
 
 	SendStatus(TFTPStatus::Success, "Command OK.");
@@ -627,7 +635,7 @@ bool CFTPWorker::Retrieve(const char* pArgs)
 	{
 		UINT nBytesRead;
 #ifdef FTPDAEMON_DEBUG
-		CLogger::Get()->Write(m_LogName, LogDebug, "Sending data");
+		LOGDBG("Sending data");
 #endif
 		if (f_read(&File, m_DataBuffer, sizeof(m_DataBuffer), &nBytesRead) != FR_OK || pDataSocket->Send(m_DataBuffer, nBytesRead, 0) < 0)
 		{
@@ -679,7 +687,7 @@ bool CFTPWorker::Store(const char* pArgs)
 	while (true)
 	{
 #ifdef FTPDAEMON_DEBUG
-		CLogger::Get()->Write(m_LogName, LogDebug, "Waiting to receive");
+		LOGDBG("Waiting to receive");
 #endif
 		int nReceiveResult = pDataSocket->Receive(m_DataBuffer, sizeof(m_DataBuffer), MSG_DONTWAIT);
 		FRESULT nWriteResult;
@@ -689,7 +697,7 @@ bool CFTPWorker::Store(const char* pArgs)
 		{
 			if (pTimer->GetTicks() - nTimeout >= SocketTimeout * HZ)
 			{
-				CLogger::Get()->Write(m_LogName, LogError, "Socket timed out");
+				LOGERR("Socket timed out");
 				bSuccess = false;
 				break;
 			}
@@ -700,17 +708,17 @@ bool CFTPWorker::Store(const char* pArgs)
 		// All done
 		if (nReceiveResult < 0)
 		{
-			CLogger::Get()->Write(m_LogName, LogNotice, "Receive done, no more data");
+			LOGNOTE("Receive done, no more data");
 			break;
 		}
 
 #ifdef FTPDAEMON_DEBUG
-		//CLogger::Get()->Write(m_LogName, LogDebug, "Received %d bytes", nReceiveResult);
+		//LOGDBG("Received %d bytes", nReceiveResult);
 #endif
 
 		if ((nWriteResult = f_write(&File, m_DataBuffer, nReceiveResult, &nWritten)) != FR_OK)
 		{
-			CLogger::Get()->Write(m_LogName, LogError, "Write FAILED, return code %d", nWriteResult);
+			LOGERR("Write FAILED, return code %d", nWriteResult);
 			bSuccess = false;
 			break;
 		}
@@ -727,7 +735,7 @@ bool CFTPWorker::Store(const char* pArgs)
 		SendStatus(TFTPStatus::ActionAborted, "File action aborted, local error.");
 
 #ifdef FTPDAEMON_DEBUG
-	CLogger::Get()->Write(m_LogName, LogDebug, "Closing socket/file");
+	LOGDBG("Closing socket/file");
 #endif
 	delete pDataSocket;
 	f_close(&File);
@@ -737,6 +745,9 @@ bool CFTPWorker::Store(const char* pArgs)
 
 bool CFTPWorker::Delete(const char* pArgs)
 {
+	if (!CheckLoggedIn())
+		return false;
+
 	CString Path = RealPath(pArgs);
 
 	if (f_unlink(Path) != FR_OK)
@@ -749,6 +760,9 @@ bool CFTPWorker::Delete(const char* pArgs)
 
 bool CFTPWorker::MakeDirectory(const char* pArgs)
 {
+	if (!CheckLoggedIn())
+		return false;
+
 	CString Path = RealPath(pArgs);
 
 	if (f_mkdir(Path) != FR_OK)
@@ -879,6 +893,9 @@ bool CFTPWorker::ChangeToParentDirectory(const char* pArgs)
 
 bool CFTPWorker::PrintWorkingDirectory(const char* pArgs)
 {
+	if (!CheckLoggedIn())
+		return false;
+
 	char Buffer[TextBufferSize];
 
 	const bool bAtRoot = m_CurrentPath.GetLength() == 0;
@@ -894,6 +911,9 @@ bool CFTPWorker::PrintWorkingDirectory(const char* pArgs)
 
 bool CFTPWorker::List(const char* pArgs)
 {
+	if (!CheckLoggedIn())
+		return false;
+
 	if (!SendStatus(TFTPStatus::FileStatusOk, "Command OK."))
 		return false;
 
@@ -943,6 +963,9 @@ bool CFTPWorker::List(const char* pArgs)
 
 bool CFTPWorker::ListFileNames(const char* pArgs)
 {
+	if (!CheckLoggedIn())
+		return false;
+
 	if (!SendStatus(TFTPStatus::FileStatusOk, "Command OK."))
 		return false;
 
@@ -980,8 +1003,38 @@ bool CFTPWorker::ListFileNames(const char* pArgs)
 	return true;
 }
 
-bool CFTPWorker::RemoveDirectory(const char* pArgs)
+bool CFTPWorker::RenameFrom(const char* pArgs)
 {
+	if (!CheckLoggedIn())
+		return false;
+
+	m_RenameFrom = pArgs;
+	SendStatus(TFTPStatus::PendingFurtherInfo, "Requested file action pending further information.");
+
+	return false;
+}
+
+bool CFTPWorker::RenameTo(const char* pArgs)
+{
+	if (!CheckLoggedIn())
+		return false;
+
+	if (m_RenameFrom.GetLength() == 0)
+	{
+		SendStatus(TFTPStatus::BadCommandSequence, "Bad sequence of commands.");
+		return false;
+	}
+
+	CString SourcePath = RealPath(m_RenameFrom);
+	CString DestPath = RealPath(pArgs);
+
+	if (f_rename(SourcePath, DestPath) != FR_OK)
+		SendStatus(TFTPStatus::FileNameNotAllowed, "File name not allowed.");
+	else
+		SendStatus(TFTPStatus::FileActionOk, "File renamed.");
+
+	m_RenameFrom = "";
+
 	return false;
 }
 

@@ -2,7 +2,7 @@
 // mt32pi.h
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -35,7 +35,7 @@
 #include <circle/multicore.h>
 #include <circle/net/netsubsystem.h>
 #include <circle/sched/scheduler.h>
-#include <circle/soundbasedevice.h>
+#include <circle/sound/soundbasedevice.h>
 #include <circle/spimaster.h>
 #include <circle/timer.h>
 #include <circle/types.h>
@@ -55,6 +55,7 @@
 #include "midiparser.h"
 #include "net/applemidi.h"
 #include "net/ftpdaemon.h"
+#include "net/udpmidi.h"
 #include "pisound.h"
 #include "power.h"
 #include "ringbuffer.h"
@@ -65,7 +66,7 @@
 
 //#define MONITOR_TEMPERATURE
 
-class CMT32Pi : CMultiCoreSupport, CPower, CMIDIParser, CAppleMIDIHandler
+class CMT32Pi : CMultiCoreSupport, CPower, CMIDIParser, CAppleMIDIHandler, CUDPMIDIHandler
 {
 public:
 	CMT32Pi(CI2CMaster* pI2CMaster, CSPIMaster* pSPIMaster, CInterruptSystem* pInterrupt, CGPIOManager* pGPIOManager, CSerialDevice* pSerialDevice, CUSBHCIDevice* pUSBHCI);
@@ -104,6 +105,9 @@ private:
 	virtual void OnAppleMIDIConnect(const CIPAddress* pIPAddress, const char* pName) override;
 	virtual void OnAppleMIDIDisconnect(const CIPAddress* pIPAddress, const char* pName) override;
 
+	// CUDPMIDIHandler
+	virtual void OnUDPMIDIDataReceived(const u8* pData, size_t nSize) override { ParseMIDIBytes(pData, nSize); };
+
 	// Initialization
 	bool InitNetwork();
 	bool InitMT32Synth();
@@ -117,6 +121,7 @@ private:
 	void UpdateUSB(bool bStartup = false);
 	void UpdateNetwork();
 	void UpdateMIDI();
+	void PurgeMIDIBuffers();
 	size_t ReceiveSerialMIDI(u8* pOutData, size_t nSize);
 	bool ParseCustomSysEx(const u8* pData, size_t nSize);
 
@@ -135,9 +140,6 @@ private:
 	void LEDOn();
 	void LCDLog(TLCDLogType Type, const char* pFormat...);
 
-	bool InitPCM51xx(u8 nAddress);
-
-	CLogger* volatile m_pLogger;
 	CConfig* volatile m_pConfig;
 
 	CTimer* m_pTimer;
@@ -154,10 +156,12 @@ private:
 
 	// Networking
 	CNetSubSystem* m_pNet;
+	CNetDevice* m_pNetDevice;
 	CBcm4343Device m_WLAN;
 	CWPASupplicant m_WPASupplicant;
 	bool m_bNetworkReady;
 	CAppleMIDIParticipant* m_pAppleMIDIParticipant;
+	CUDPMIDIReceiver* m_pUDPMIDIReceiver;
 	CFTPDaemon* m_pFTPDaemon;
 
 	CBcmRandomNumberGenerator m_Random;

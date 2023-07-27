@@ -2,7 +2,7 @@
 // rotaryencoder.h
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -50,8 +50,12 @@ private:
 
 	TEncoderType m_Type;
 	bool m_bReversed;
+
 	s8 m_nDelta;
-	s8 m_nPreviousState;
+	u8 m_nState;
+
+	// Bitmask of which valid 4-bit transition codes we have seen in each direction (CW and CCW)
+	u16 nPreviousTransitions[2];
 
 	unsigned int m_nLastReadTime;
 };

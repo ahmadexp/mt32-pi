@@ -2,7 +2,7 @@
 // midiparser.cpp
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -24,7 +24,7 @@
 
 #include "midiparser.h"
 
-const char MIDIParserName[] = "midiparser";
+LOGMODULE("midiparser");
 
 CMIDIParser::CMIDIParser()
 	: m_State(TState::StatusByte),
@@ -33,7 +33,7 @@ CMIDIParser::CMIDIParser()
 {
 }
 
-void CMIDIParser::ParseMIDIBytes(const u8* pData, size_t nSize)
+void CMIDIParser::ParseMIDIBytes(const u8* pData, size_t nSize, bool bIgnoreNoteOns)
 {
 	// Process MIDI messages
 	// See: https://www.midi.org/specifications/item/table-1-summary-of-midi-message
@@ -71,7 +71,7 @@ void CMIDIParser::ParseMIDIBytes(const u8* pData, size_t nSize)
 				}
 
 				m_MessageBuffer[m_nMessageLength++] = nByte;
-				CheckCompleteShortMessage();
+				CheckCompleteShortMessage(bIgnoreNoteOns);
 				break;
 
 			// Expecting a SysEx data byte or EOX
@@ -111,14 +111,14 @@ void CMIDIParser::ParseMIDIBytes(const u8* pData, size_t nSize)
 void CMIDIParser::OnUnexpectedStatus()
 {
 	if (m_State == TState::SysExByte)
-		CLogger::Get()->Write(MIDIParserName, LogWarning, "Received illegal status byte during SysEx message; SysEx ignored");
+		LOGWARN("Received illegal status byte during SysEx message; SysEx ignored");
 	else
-		CLogger::Get()->Write(MIDIParserName, LogWarning, "Received illegal status byte when data expected");
+		LOGWARN("Received illegal status byte when data expected");
 }
 
 void CMIDIParser::OnSysExOverflow()
 {
-	CLogger::Get()->Write(MIDIParserName, LogWarning, "Buffer overrun when receiving SysEx message; SysEx ignored");
+	LOGWARN("Buffer overrun when receiving SysEx message; SysEx ignored");
 }
 
 void CMIDIParser::ParseStatusByte(u8 nByte)
@@ -167,7 +167,7 @@ void CMIDIParser::ParseStatusByte(u8 nByte)
 	}
 }
 
-bool CMIDIParser::CheckCompleteShortMessage()
+bool CMIDIParser::CheckCompleteShortMessage(bool bIgnoreNoteOns)
 {
 	const u8 nStatus = m_MessageBuffer[0];
 
@@ -176,7 +176,10 @@ bool CMIDIParser::CheckCompleteShortMessage()
 	if (m_nMessageLength == 3 ||
 		(m_nMessageLength == 2 && ((nStatus >= 0xC0 && nStatus <= 0xDF) || nStatus == 0xF1 || nStatus == 0xF3)))
 	{
-		OnShortMessage(PrepareShortMessage());
+		const bool bIsNoteOn = (nStatus & 0xF0) == 0x90;
+
+		if (!(bIsNoteOn && bIgnoreNoteOns))
+			OnShortMessage(PrepareShortMessage());
 
 		// Clear running status if System Common
 		ResetState(nStatus >= 0xF1 && nStatus <= 0xF7);

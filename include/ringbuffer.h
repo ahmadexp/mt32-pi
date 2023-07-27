@@ -2,7 +2,7 @@
 // ringbuffer.h
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -87,7 +87,7 @@ public:
 		size_t nDequeued = 0;
 		m_Lock.Acquire();
 
-		while (m_nInPtr != m_nOutPtr)
+		while (m_nInPtr != m_nOutPtr && nDequeued < nMaxCount)
 		{
 			pOutBuffer[nDequeued++] = m_Data[m_nOutPtr++];
 			m_nOutPtr &= BufferMask;

@@ -2,7 +2,7 @@
 // mt32pi.cpp
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -20,11 +20,11 @@
 // mt32-pi. If not, see <http://www.gnu.org/licenses/>.
 //
 
-#include <circle/hdmisoundbasedevice.h>
-#include <circle/i2ssoundbasedevice.h>
 #include <circle/memory.h>
-#include <circle/pwmsoundbasedevice.h>
 #include <circle/serial.h>
+#include <circle/sound/hdmisoundbasedevice.h>
+#include <circle/sound/i2ssoundbasedevice.h>
+#include <circle/sound/pwmsoundbasedevice.h>
 
 #include <cstdarg>
 
@@ -34,7 +34,7 @@
 #include "mt32pi.h"
 
 #define MT32_PI_NAME "mt32-pi"
-const char MT32PiName[] = MT32_PI_NAME;
+LOGMODULE(MT32_PI_NAME);
 const char MT32PiFullName[] = MT32_PI_NAME " " MT32_PI_VERSION;
 
 const char WLANFirmwarePath[] = "SD:firmware/";
@@ -62,7 +62,6 @@ CMT32Pi::CMT32Pi(CI2CMaster* pI2CMaster, CSPIMaster* pSPIMaster, CInterruptSyste
 	: CMultiCoreSupport(CMemorySystem::Get()),
 	  CMIDIParser(),
 
-	  m_pLogger(CLogger::Get()),
 	  m_pConfig(CConfig::Get()),
 
 	  m_pTimer(CTimer::Get()),
@@ -78,10 +77,12 @@ CMT32Pi::CMT32Pi(CI2CMaster* pI2CMaster, CSPIMaster* pSPIMaster, CInterruptSyste
 	  m_bUSBAvailable(false),
 
 	  m_pNet(nullptr),
+	  m_pNetDevice(nullptr),
 	  m_WLAN(WLANFirmwarePath),
 	  m_WPASupplicant(WLANConfigFile),
 	  m_bNetworkReady(false),
 	  m_pAppleMIDIParticipant(nullptr),
+	  m_pUDPMIDIReceiver(nullptr),
 	  m_pFTPDaemon(nullptr),
 
 	  m_pLCD(nullptr),
@@ -147,7 +148,7 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 			break;
 
 		case CConfig::TLCDType::SSD1306I2C:
-			m_pLCD = new CSSD1306(m_pI2CMaster, m_pConfig->LCDI2CLCDAddress, m_pConfig->LCDWidth, m_pConfig->LCDHeight, m_pConfig->LCDRotation);
+			m_pLCD = new CSSD1306(m_pI2CMaster, m_pConfig->LCDI2CLCDAddress, m_pConfig->LCDWidth, m_pConfig->LCDHeight, m_pConfig->LCDRotation, m_pConfig->LCDMirror);
 			break;
 
 		default:
@@ -158,7 +159,7 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 	{
 		if (m_pLCD->Initialize())
 		{
-			m_pLogger->RegisterPanicHandler(PanicHandler);
+			CLogger::Get()->RegisterPanicHandler(PanicHandler);
 
 			// Splash screen
 			if (m_pLCD->GetType() == CLCD::TType::Graphical && !m_pConfig->SystemVerbose)
@@ -171,7 +172,7 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 		}
 		else
 		{
-			m_pLogger->Write(MT32PiName, LogWarning, "LCD init failed; invalid dimensions?");
+			LOGWARN("LCD init failed; invalid dimensions?");
 			delete m_pLCD;
 			m_pLCD = nullptr;
 		}
@@ -194,18 +195,21 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 	LCDLog(TLCDLogType::Startup, "Init Network");
 	InitNetwork();
 
-	// Check for Blokas Pisound
-	m_pPisound = new CPisound(m_pSPIMaster, m_pGPIOManager, m_pConfig->AudioSampleRate);
-	if (m_pPisound->Initialize())
+	// Check for Blokas Pisound, but only when not using 4-bit HD44780 (GPIO pin conflict)
+	if (m_pConfig->LCDType != CConfig::TLCDType::HD44780FourBit)
 	{
-		m_pLogger->Write(MT32PiName, LogWarning, "Blokas Pisound detected");
-		m_pPisound->RegisterMIDIReceiveHandler(IRQMIDIReceiveHandler);
-		m_bSerialMIDIEnabled = false;
-	}
-	else
-	{
-		delete m_pPisound;
-		m_pPisound = nullptr;
+		m_pPisound = new CPisound(m_pSPIMaster, m_pGPIOManager, m_pConfig->AudioSampleRate);
+		if (m_pPisound->Initialize())
+		{
+			LOGWARN("Blokas Pisound detected");
+			m_pPisound->RegisterMIDIReceiveHandler(IRQMIDIReceiveHandler);
+			m_bSerialMIDIEnabled = false;
+		}
+		else
+		{
+			delete m_pPisound;
+			m_pPisound = nullptr;
+		}
 	}
 
 	// Queue size of just one chunk
@@ -237,11 +241,12 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 
 			// Pisound provides clock
 			const bool bSlave = m_pPisound != nullptr;
-			m_pSound = new CI2SSoundBaseDevice(m_pInterrupt, m_pConfig->AudioSampleRate, m_pConfig->AudioChunkSize, bSlave);
-			Format = TSoundFormat::SoundFormatSigned24_32;
 
-			if (m_pConfig->AudioI2CDACInit == CConfig::TAudioI2CDACInit::PCM51xx)
-				InitPCM51xx(m_pConfig->AudioI2CDACAddress);
+			// Don't probe if using Pisound
+			CI2CMaster* const pI2CMaster = bSlave ? nullptr : m_pI2CMaster;
+
+			m_pSound = new CI2SSoundBaseDevice(m_pInterrupt, m_pConfig->AudioSampleRate, m_pConfig->AudioChunkSize, bSlave, pI2CMaster);
+			Format = TSoundFormat::SoundFormatSigned24_32;
 
 			break;
 		}
@@ -249,7 +254,7 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 
 	m_pSound->SetWriteFormat(Format);
 	if (!m_pSound->AllocateQueueFrames(nQueueSize))
-		m_pLogger->Write(MT32PiName, LogPanic, "Failed to allocate sound queue");
+		LOGPANIC("Failed to allocate sound queue");
 
 	LCDLog(TLCDLogType::Startup, "Init controls");
 	if (m_pConfig->ControlScheme == CConfig::TControlScheme::SimpleButtons)
@@ -259,7 +264,7 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 
 	if (m_pControl && !m_pControl->Initialize())
 	{
-		m_pLogger->Write(MT32PiName, LogWarning, "Control init failed");
+		LOGWARN("Control init failed");
 		delete m_pControl;
 		m_pControl = nullptr;
 	}
@@ -278,7 +283,7 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 
 	if (!m_pCurrentSynth)
 	{
-		m_pLogger->Write(MT32PiName, LogError, "Preferred synth failed to initialize successfully");
+		LOGERR("Preferred synth failed to initialize successfully");
 
 		// Activate any working synth
 		if (m_pMT32Synth)
@@ -287,15 +292,15 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 			m_pCurrentSynth = m_pSoundFontSynth;
 		else
 		{
-			m_pLogger->Write(MT32PiName, LogPanic, "No synths available; ROMs/SoundFonts not found");
+			LOGPANIC("No synths available; ROMs/SoundFonts not found");
 			return false;
 		}
 	}
 
 	if (m_pPisound)
-		m_pLogger->Write(MT32PiName, LogNotice, "Using Pisound MIDI interface");
+		LOGNOTE("Using Pisound MIDI interface");
 	else if (m_bSerialMIDIEnabled)
-		m_pLogger->Write(MT32PiName, LogNotice, "Using serial MIDI interface");
+		LOGNOTE("Using serial MIDI interface");
 
 	CCPUThrottle::Get()->DumpStatus();
 	SetPowerSaveTimeout(m_pConfig->SystemPowerSaveTimeout);
@@ -322,16 +327,16 @@ bool CMT32Pi::InitNetwork()
 
 	if (m_pConfig->NetworkMode == CConfig::TNetworkMode::WiFi)
 	{
-		m_pLogger->Write(MT32PiName, LogNotice, "Initializing Wi-Fi");
+		LOGNOTE("Initializing Wi-Fi");
 
 		if (m_WLAN.Initialize() && m_WPASupplicant.Initialize())
 			NetDeviceType = NetDeviceTypeWLAN;
 		else
-			m_pLogger->Write(MT32PiName, LogError, "Failed to initialize Wi-Fi");
+			LOGERR("Failed to initialize Wi-Fi");
 	}
 	else if (m_pConfig->NetworkMode == CConfig::TNetworkMode::Ethernet)
 	{
-		m_pLogger->Write(MT32PiName, LogNotice, "Initializing Ethernet");
+		LOGNOTE("Initializing Ethernet");
 		NetDeviceType = NetDeviceTypeEthernet;
 	}
 
@@ -351,10 +356,12 @@ bool CMT32Pi::InitNetwork()
 
 		if (!m_pNet->Initialize(false))
 		{
-			m_pLogger->Write(MT32PiName, LogError, "Failed to initialize network subsystem");
+			LOGERR("Failed to initialize network subsystem");
 			delete m_pNet;
 			m_pNet = nullptr;
 		}
+
+		m_pNetDevice = CNetDevice::GetNetDevice(NetDeviceType);
 	}
 
 	return m_pNet != nullptr;
@@ -367,7 +374,7 @@ bool CMT32Pi::InitMT32Synth()
 	m_pMT32Synth = new CMT32Synth(m_pConfig->AudioSampleRate, m_pConfig->MT32EmuGain, m_pConfig->MT32EmuReverbGain, m_pConfig->MT32EmuResamplerQuality);
 	if (!m_pMT32Synth->Initialize())
 	{
-		m_pLogger->Write(MT32PiName, LogWarning, "mt32emu init failed; no ROMs present?");
+		LOGWARN("mt32emu init failed; no ROMs present?");
 		delete m_pMT32Synth;
 		m_pMT32Synth = nullptr;
 		return false;
@@ -389,10 +396,10 @@ bool CMT32Pi::InitSoundFontSynth()
 {
 	assert(m_pSoundFontSynth == nullptr);
 
-	m_pSoundFontSynth = new CSoundFontSynth(m_pConfig->AudioSampleRate, m_pConfig->FluidSynthGain, m_pConfig->FluidSynthPolyphony);
+	m_pSoundFontSynth = new CSoundFontSynth(m_pConfig->AudioSampleRate);
 	if (!m_pSoundFontSynth->Initialize())
 	{
-		m_pLogger->Write(MT32PiName, LogWarning, "FluidSynth init failed; no SoundFonts present?");
+		LOGWARN("FluidSynth init failed; no SoundFonts present?");
 		delete m_pSoundFontSynth;
 		m_pSoundFontSynth = nullptr;
 		return false;
@@ -407,7 +414,7 @@ void CMT32Pi::MainTask()
 {
 	CScheduler* const pScheduler = CScheduler::Get();
 
-	m_pLogger->Write(MT32PiName, LogNotice, "Main task on Core 0 starting up");
+	LOGNOTE("Main task on Core 0 starting up");
 
 	Awaken();
 
@@ -440,7 +447,7 @@ void CMT32Pi::MainTask()
 		{
 			m_pCurrentSynth->AllSoundOff();
 			m_bActiveSenseFlag = false;
-			m_pLogger->Write(MT32PiName, LogNotice, "Active sense timeout - turning notes off");
+			LOGNOTE("Active sense timeout - turning notes off");
 		}
 
 		// Update power management
@@ -450,7 +457,9 @@ void CMT32Pi::MainTask()
 #ifdef MONITOR_TEMPERATURE
 		if (nTicks - m_nTempUpdateTime >= MSEC2HZ(5000))
 		{
-			m_pLogger->Write(MT32PiName, LogDebug, "Temperature: %dC", CCPUThrottle::Get()->GetTemperature());
+			const unsigned int nTemp = CCPUThrottle::Get()->GetTemperature();
+			LOGDBG("Temperature: %dC", nTemp);
+			LCDLog(TLCDLogType::Notice, "Temp: %dC", nTemp);
 			m_nTempUpdateTime = nTicks;
 		}
 #endif
@@ -491,7 +500,7 @@ void CMT32Pi::MainTask()
 
 void CMT32Pi::UITask()
 {
-	m_pLogger->Write(MT32PiName, LogNotice, "UI task on Core 1 starting up");
+	LOGNOTE("UI task on Core 1 starting up");
 
 	const bool bMisterEnabled = m_pConfig->ControlMister;
 
@@ -546,12 +555,13 @@ void CMT32Pi::UITask()
 
 void CMT32Pi::AudioTask()
 {
-	m_pLogger->Write(MT32PiName, LogNotice, "Audio task on Core 2 starting up");
+	LOGNOTE("Audio task on Core 2 starting up");
 
 	constexpr u8 nChannels = 2;
 
 	// Circle's "fast path" for I2S 24-bit really expects 32-bit samples
 	const bool bI2S = m_pConfig->AudioOutputDevice == CConfig::TAudioOutputDevice::I2S;
+	const bool bReversedStereo = m_pConfig->AudioReversedStereo;
 	const u8 nBytesPerSample = bI2S ? sizeof(s32) : (sizeof(s8) * 3);
 	const u8 nBytesPerFrame = 2 * nBytesPerSample;
 
@@ -568,16 +578,30 @@ void CMT32Pi::AudioTask()
 
 		m_pCurrentSynth->Render(FloatBuffer, nFrames);
 
-		// Convert to signed 24-bit integers
-		for (size_t i = 0; i < nFrames * nChannels; ++i)
+		if (bReversedStereo)
 		{
-			s32* const pSample = reinterpret_cast<s32*>(IntBuffer + i * nBytesPerSample);
-			*pSample = FloatBuffer[i] * Sample24BitMax;
+			// Convert to signed 24-bit integers with channel swap
+			for (size_t i = 0; i < nFrames * nChannels; i += nChannels)
+			{
+				s32* const pLeftSample = reinterpret_cast<s32*>(IntBuffer + i * nBytesPerSample);
+				s32* const pRightSample = reinterpret_cast<s32*>(IntBuffer + (i + 1) * nBytesPerSample);
+				*pLeftSample = FloatBuffer[i + 1] * Sample24BitMax;
+				*pRightSample = FloatBuffer[i] * Sample24BitMax;
+			}
+		}
+		else
+		{
+			// Convert to signed 24-bit integers
+			for (size_t i = 0; i < nFrames * nChannels; ++i)
+			{
+				s32* const pSample = reinterpret_cast<s32*>(IntBuffer + i * nBytesPerSample);
+				*pSample = FloatBuffer[i] * Sample24BitMax;
+			}
 		}
 
 		const int nResult = m_pSound->Write(IntBuffer, nWriteBytes);
 		if (nResult != static_cast<int>(nWriteBytes))
-			m_pLogger->Write(MT32PiName, LogError, "Sound data dropped");
+			LOGERR("Sound data dropped");
 	}
 }
 
@@ -701,7 +725,7 @@ bool CMT32Pi::ParseCustomSysEx(const u8* pData, size_t nSize)
 	// Reboot (F0 7D 00 F7)
 	if (nSize == 4 && Command == TCustomSysExCommand::Reboot)
 	{
-		m_pLogger->Write(MT32PiName, LogNotice, "Reboot command received");
+		LOGNOTE("Reboot command received");
 		m_bRunning = false;
 		return true;
 	}
@@ -758,10 +782,10 @@ void CMT32Pi::UpdateUSB(bool bStartup)
 	if (!m_pUSBMassStorageDevice && pUSBMassStorageDevice)
 	{
 		// USB disk was attached
-		m_pLogger->Write(MT32PiName, LogNotice, "USB mass storage device attached");
+		LOGNOTE("USB mass storage device attached");
 
 		if (f_mount(&m_USBFileSystem, "USB:", 1) != FR_OK)
-			m_pLogger->Write(MT32PiName, LogError, "Failed to mount USB mass storage device");
+			LOGERR("Failed to mount USB mass storage device");
 		else
 		{
 			if (!bStartup)
@@ -786,7 +810,7 @@ void CMT32Pi::UpdateUSB(bool bStartup)
 	else if (m_pUSBMassStorageDevice && !pUSBMassStorageDevice)
 	{
 		// USB disk was removed
-		m_pLogger->Write(MT32PiName, LogNotice, "USB mass storage device removed");
+		LOGNOTE("USB mass storage device removed");
 
 		f_unmount("USB:");
 
@@ -804,7 +828,7 @@ void CMT32Pi::UpdateUSB(bool bStartup)
 	{
 		m_pUSBMIDIDevice->RegisterRemovedHandler(USBMIDIDeviceRemovedHandler, &m_pUSBMIDIDevice);
 		m_pUSBMIDIDevice->RegisterPacketHandler(USBMIDIPacketHandler);
-		m_pLogger->Write(MT32PiName, LogNotice, "Using USB MIDI interface");
+		LOGNOTE("Using USB MIDI interface");
 		m_bSerialMIDIEnabled = false;
 	}
 
@@ -812,7 +836,7 @@ void CMT32Pi::UpdateUSB(bool bStartup)
 	{
 		m_pUSBSerialDevice->SetBaudRate(m_pConfig->MIDIUSBSerialBaudRate);
 		m_pUSBSerialDevice->RegisterRemovedHandler(USBMIDIDeviceRemovedHandler, &m_pUSBSerialDevice);
-		m_pLogger->Write(MT32PiName, LogNotice, "Using USB serial interface");
+		LOGNOTE("Using USB serial interface");
 		m_bSerialMIDIEnabled = false;
 	}
 }
@@ -822,7 +846,11 @@ void CMT32Pi::UpdateNetwork()
 	if (!m_pNet)
 		return;
 
-	const bool bNetIsRunning = m_pNet->IsRunning();
+	bool bNetIsRunning = m_pNet->IsRunning();
+	if (m_pConfig->NetworkMode == CConfig::TNetworkMode::Ethernet)
+		bNetIsRunning &= m_pNetDevice->IsLinkUp();
+	else if (m_pConfig->NetworkMode == CConfig::TNetworkMode::WiFi)
+		bNetIsRunning &= m_WPASupplicant.IsConnected();
 
 	if (!m_bNetworkReady && bNetIsRunning)
 	{
@@ -831,48 +859,55 @@ void CMT32Pi::UpdateNetwork()
 		CString IPString;
 		m_pNet->GetConfig()->GetIPAddress()->Format(&IPString);
 
-		m_pLogger->Write(MT32PiName, LogNotice, "Network up and running at: %s", static_cast<const char *>(IPString));
+		LOGNOTE("Network up and running at: %s", static_cast<const char *>(IPString));
 		LCDLog(TLCDLogType::Notice, "%s: %s", GetNetworkDeviceShortName(), static_cast<const char*>(IPString));
 
-		if (m_pConfig->NetworkRTPMIDI)
+		if (m_pConfig->NetworkRTPMIDI && !m_pAppleMIDIParticipant)
 		{
 			m_pAppleMIDIParticipant = new CAppleMIDIParticipant(&m_Random, this);
 			if (!m_pAppleMIDIParticipant->Initialize())
 			{
-				m_pLogger->Write(MT32PiName, LogError, "Failed to init AppleMIDI receiver");
+				LOGERR("Failed to init AppleMIDI receiver");
 				delete m_pAppleMIDIParticipant;
 				m_pAppleMIDIParticipant = nullptr;
 			}
 			else
-				m_pLogger->Write(MT32PiName, LogNotice, "AppleMIDI receiver initialized");
+				LOGNOTE("AppleMIDI receiver initialized");
 		}
 
-		if (m_pConfig->NetworkFTPServer)
+		if (m_pConfig->NetworkUDPMIDI && !m_pUDPMIDIReceiver)
+		{
+			m_pUDPMIDIReceiver = new CUDPMIDIReceiver(this);
+			if (!m_pUDPMIDIReceiver->Initialize())
+			{
+				LOGERR("Failed to init UDP MIDI receiver");
+				delete m_pUDPMIDIReceiver;
+				m_pUDPMIDIReceiver = nullptr;
+			}
+			else
+				LOGNOTE("UDP MIDI receiver initialized");
+		}
+
+		if (m_pConfig->NetworkFTPServer && !m_pFTPDaemon)
 		{
 			m_pFTPDaemon = new CFTPDaemon(m_pConfig->NetworkFTPUsername, m_pConfig->NetworkFTPPassword);
 			if (!m_pFTPDaemon->Initialize())
 			{
-				m_pLogger->Write(MT32PiName, LogError, "Failed to init FTP daemon");
+				LOGERR("Failed to init FTP daemon");
 				delete m_pFTPDaemon;
 				m_pFTPDaemon = nullptr;
 			}
 			else
-				m_pLogger->Write(MT32PiName, LogNotice, "FTP daemon initialized");
+				LOGNOTE("FTP daemon initialized");
 		}
 	}
 	else if (m_bNetworkReady && !bNetIsRunning)
 	{
 		m_bNetworkReady = false;
-		m_pLogger->Write(MT32PiName, LogNotice, "Network disconnected.");
+		LOGNOTE("Network disconnected.");
 		LCDLog(TLCDLogType::Notice, "%s disconnected!", GetNetworkDeviceShortName());
 
-		delete m_pAppleMIDIParticipant;
-		m_pAppleMIDIParticipant = nullptr;
-		delete m_pFTPDaemon;
-		m_pFTPDaemon = nullptr;
 	}
-
-	m_pNet->Process();
 }
 
 void CMT32Pi::UpdateMIDI()
@@ -899,6 +934,22 @@ void CMT32Pi::UpdateMIDI()
 
 	// Reset the Active Sense timer
 	s_pThis->m_nActiveSenseTime = s_pThis->m_pTimer->GetTicks();
+}
+
+void CMT32Pi::PurgeMIDIBuffers()
+{
+	size_t nBytes;
+	u8 Buffer[MIDIRxBufferSize];
+
+	// Process MIDI messages from all devices/ring buffers, but ignore note-ons
+	while (m_bSerialMIDIEnabled && (nBytes = ReceiveSerialMIDI(Buffer, sizeof(Buffer))) > 0)
+		ParseMIDIBytes(Buffer, nBytes, true);
+
+	while (m_pUSBSerialDevice && (nBytes = m_pUSBSerialDevice->Read(Buffer, sizeof(Buffer))) > 0)
+		ParseMIDIBytes(Buffer, nBytes, true);
+
+	while ((nBytes = m_MIDIRxBuffer.Dequeue(Buffer, sizeof(Buffer))) > 0)
+		ParseMIDIBytes(Buffer, nBytes, true);
 }
 
 size_t CMT32Pi::ReceiveSerialMIDI(u8* pOutData, size_t nSize)
@@ -935,7 +986,7 @@ size_t CMT32Pi::ReceiveSerialMIDI(u8* pOutData, size_t nSize)
 					break;
 			}
 
-			m_pLogger->Write(MT32PiName, LogWarning, pErrorString);
+			LOGWARN(pErrorString);
 			LCDLog(TLCDLogType::Warning, pErrorString);
 		}
 
@@ -948,7 +999,7 @@ size_t CMT32Pi::ReceiveSerialMIDI(u8* pOutData, size_t nSize)
 		int nSendResult = m_pSerial->Write(pOutData, nResult);
 		if (nSendResult != nResult)
 		{
-			m_pLogger->Write(MT32PiName, LogError, "received %d bytes, but only sent %d bytes", nResult, nSendResult);
+			LOGERR("received %d bytes, but only sent %d bytes", nResult, nSendResult);
 			LCDLog(TLCDLogType::Error, "UART TX error!");
 		}
 	}
@@ -1016,7 +1067,7 @@ void CMT32Pi::ProcessButtonEvent(const TButtonEvent& Event)
 	if (!Event.bPressed)
 		return;
 
-	if (Event.Button == TButton::Button1)
+	if (Event.Button == TButton::Button1 && !Event.bRepeat)
 	{
 		// Swap synths
 		if (m_pCurrentSynth == m_pMT32Synth)
@@ -1024,7 +1075,7 @@ void CMT32Pi::ProcessButtonEvent(const TButtonEvent& Event)
 		else
 			SwitchSynth(TSynth::MT32);
 	}
-	else if (Event.Button == TButton::Button2 && Event.bPressed)
+	else if (Event.Button == TButton::Button2 && !Event.bRepeat)
 	{
 		if (m_pCurrentSynth == m_pMT32Synth)
 			NextMT32ROMSet();
@@ -1088,7 +1139,7 @@ void CMT32Pi::SwitchSynth(TSynth NewSynth)
 	m_pCurrentSynth->AllSoundOff();
 	m_pCurrentSynth = pNewSynth;
 	const char* pMode = NewSynth == TSynth::MT32 ? "MT-32 mode" : "SoundFont mode";
-	m_pLogger->Write(MT32PiName, LogNotice, "Switching to %s", pMode);
+	LOGNOTE("Switching to %s", pMode);
 	LCDLog(TLCDLogType::Notice, pMode);
 }
 
@@ -1097,7 +1148,7 @@ void CMT32Pi::SwitchMT32ROMSet(TMT32ROMSet ROMSet)
 	if (m_pMT32Synth == nullptr)
 		return;
 
-	m_pLogger->Write(MT32PiName, LogNotice, "Switching to ROM set %d", static_cast<u8>(ROMSet));
+	LOGNOTE("Switching to ROM set %d", static_cast<u8>(ROMSet));
 	if (m_pMT32Synth->SwitchROMSet(ROMSet) && m_pCurrentSynth == m_pMT32Synth)
 		m_pMT32Synth->ReportStatus();
 }
@@ -1107,7 +1158,7 @@ void CMT32Pi::NextMT32ROMSet()
 	if (m_pMT32Synth == nullptr)
 		return;
 
-	m_pLogger->Write(MT32PiName, LogNotice, "Switching to next ROM set");
+	LOGNOTE("Switching to next ROM set");
 
 	if (m_pMT32Synth->NextROMSet() && m_pCurrentSynth == m_pMT32Synth)
 		m_pMT32Synth->ReportStatus();
@@ -1118,9 +1169,15 @@ void CMT32Pi::SwitchSoundFont(size_t nIndex)
 	if (m_pSoundFontSynth == nullptr)
 		return;
 
-	m_pLogger->Write(MT32PiName, LogNotice, "Switching to SoundFont %d", nIndex);
-	if (m_pSoundFontSynth->SwitchSoundFont(nIndex) && m_pCurrentSynth == m_pSoundFontSynth)
-		m_pSoundFontSynth->ReportStatus();
+	LOGNOTE("Switching to SoundFont %d", nIndex);
+	if (m_pSoundFontSynth->SwitchSoundFont(nIndex))
+	{
+		// Handle any MIDI data that has been queued up while busy
+		PurgeMIDIBuffers();
+
+		if (m_pCurrentSynth == m_pSoundFontSynth)
+			m_pSoundFontSynth->ReportStatus();
+	}
 }
 
 void CMT32Pi::DeferSwitchSoundFont(size_t nIndex)
@@ -1182,33 +1239,6 @@ void CMT32Pi::LCDLog(TLCDLogType Type, const char* pFormat...)
 		m_UserInterface.ShowSystemMessage(Buffer, Type == TLCDLogType::Spinner);
 }
 
-// TODO: Generic configurable DAC init class
-bool CMT32Pi::InitPCM51xx(u8 nAddress)
-{
-	static const u8 InitBytes[][2] =
-	{
-		// Set PLL reference clock to BCK (set SREF to 001b)
-		{ 0x0D, 0x10 },
-
-		// Ignore clock halt detection (set IDCH to 1)
-		{ 0x25, 0x08 },
-
-		// Disable auto mute
-		{ 0x41, 0x04 }
-	};
-
-	for (auto& Command : InitBytes)
-	{
-		if (m_pI2CMaster->Write(nAddress, &Command, sizeof(Command)) != sizeof(Command))
-		{
-			m_pLogger->Write(MT32PiName, LogWarning, "I2C write error (DAC init sequence)");
-			return false;
-		}
-	}
-
-	return true;
-}
-
 const char* CMT32Pi::GetNetworkDeviceShortName() const
 {
 	switch (m_pConfig->NetworkMode)
@@ -1237,7 +1267,7 @@ void CMT32Pi::USBMIDIDeviceRemovedHandler(CDevice* pDevice, void* pContext)
 	// Re-enable serial MIDI if not in-use by logger and no other MIDI devices available
 	if (s_pThis->m_bSerialMIDIAvailable && !(s_pThis->m_pUSBMIDIDevice || s_pThis->m_pUSBSerialDevice || s_pThis->m_pPisound))
 	{
-		s_pThis->m_pLogger->Write(MT32PiName, LogNotice, "Using serial MIDI interface");
+		LOGNOTE("Using serial MIDI interface");
 		s_pThis->m_bSerialMIDIEnabled = true;
 	}
 }
@@ -1256,7 +1286,7 @@ void CMT32Pi::IRQMIDIReceiveHandler(const u8* pData, size_t nSize)
 	if (s_pThis->m_MIDIRxBuffer.Enqueue(pData, nSize) != nSize)
 	{
 		static const char* pErrorString = "MIDI overrun error!";
-		s_pThis->m_pLogger->Write(MT32PiName, LogWarning, pErrorString);
+		LOGWARN(pErrorString);
 		s_pThis->LCDLog(TLCDLogType::Error, pErrorString);
 	}
 }
@@ -1277,7 +1307,7 @@ void CMT32Pi::PanicHandler()
 	s_pThis->m_pLCD->Print(pGuru, nOffsetX, 0, true, true);
 
 	char Buffer[LOGGER_BUFSIZE];
-	s_pThis->m_pLogger->Read(Buffer, sizeof(Buffer), false);
+	CLogger::Get()->Read(Buffer, sizeof(Buffer), false);
 
 	// Find last newline
 	char* pMessageStart = strrchr(Buffer, '\n');

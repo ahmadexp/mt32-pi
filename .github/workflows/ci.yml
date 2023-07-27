@@ -3,9 +3,36 @@ name: mt32-pi CI
 on: [push, pull_request]
 
 env:
-  toolchain-version: 10.3-2021.07
+  toolchain-version: 11.3.rel1
+  python-version: 3.11
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4.5.0
+        with:
+          python-version: ${{ env.python-version }}
+
+      - uses: psf/black@stable
+        with:
+          options: --check --diff --preview
+          src: scripts
+
+      - uses: isort/isort-action@master
+        with:
+            sortPaths: scripts
+
+      - uses: py-actions/flake8@v2
+        with:
+          path: scripts
+
+      - uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: scripts
+
   build:
     runs-on: ubuntu-latest
     name: build-${{ matrix.board }}
@@ -14,39 +41,48 @@ jobs:
       matrix:
         board: [pi2, pi3-64, pi4-64]
     steps:
-    - uses: actions/checkout@v2.4.0
+    - uses: actions/checkout@v3
+
+    - name: Fetch submodules
+      run: make submodules
+
+    - name: Setup ccache
+      uses: hendrikmuhs/ccache-action@v1.2
       with:
-        submodules: recursive
+        key: ${{ env.toolchain-version }}-${{ matrix.board }}
 
     - name: Cache ARM toolchains
       id: cache-toolchains
-      uses: actions/cache@v2.1.7
+      uses: actions/cache@v3
       with:
         path: |
-          ~/gcc-arm-${{ env.toolchain-version }}-x86_64-arm-none-eabi
-          ~/gcc-arm-${{ env.toolchain-version }}-x86_64-aarch64-none-elf
+          ~/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-arm-none-eabi
+          ~/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-aarch64-none-elf
         key: cache-arm-toolchains-${{ env.toolchain-version }}
 
     - name: Install toolchains if not retrieved from cache
       if: steps.cache-toolchains.outputs.cache-hit != 'true'
       run: |
         for triplet in arm-none-eabi aarch64-none-elf; do
-          wget -q https://developer.arm.com/-/media/Files/downloads/gnu-a/${{ env.toolchain-version }}/binrel/gcc-arm-${{ env.toolchain-version }}-x86_64-${triplet}.tar.xz
-          tar -xf gcc-arm-${{ env.toolchain-version }}-x86_64-${triplet}.tar.xz -C ~
-          rm gcc-arm-${{ env.toolchain-version }}-x86_64-${triplet}.tar.xz
+          wget -q https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.toolchain-version }}/binrel/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-${triplet}.tar.xz
+          tar -xf arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-${triplet}.tar.xz -C ~
+          rm arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-${triplet}.tar.xz
         done
 
     - name: Update PATH
       run: |
+        mkdir ~/ccache_bin
         for triplet in arm-none-eabi aarch64-none-elf; do
-          echo "$HOME/gcc-arm-${{ env.toolchain-version }}-x86_64-${triplet}/bin" >> $GITHUB_PATH
+          ln -s $(which ccache) ~/ccache_bin/${triplet}-gcc
+          ln -s $(which ccache) ~/ccache_bin/${triplet}-g++
+          echo "$HOME/ccache_bin:$HOME/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-${triplet}/bin" >> $GITHUB_PATH
         done
 
     - name: Build
       run: make -j BOARD=${{ matrix.board }}
 
     - name: Upload built kernel
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: kernels
         path: kernel*.img
@@ -55,7 +91,7 @@ jobs:
       run: make clean && make -j BOARD=${{ matrix.board }} HDMI_CONSOLE=1
 
     - name: Upload built kernel
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: kernels-hdmi
         path: kernel*.img
@@ -68,13 +104,14 @@ jobs:
       wlan-home: external/circle-stdlib/libs/circle/addon/wlan
 
     steps:
-    - uses: actions/checkout@v2.4.0
-      with:
-        submodules: recursive
+    - uses: actions/checkout@v3
+
+    - name: Fetch submodules
+      run: make submodules
 
     - name: Cache boot files
       id: cache-boot-files
-      uses: actions/cache@v2.1.7
+      uses: actions/cache@v3
       with:
         path: |
           sdcard/armstub8-rpi4.bin
@@ -92,25 +129,25 @@ jobs:
 
     - name: Cache WLAN firmware
       id: cache-wlan-firmware
-      uses: actions/cache@v2.1.7
+      uses: actions/cache@v3
       with:
         path: sdcard/firmware
         key: cache-wlan-firmware-${{ hashFiles(join(env.wlan-home, '/firmware/Makefile')) }}
 
     - name: Cache ARM toolchains
       if: steps.cache-boot-files.outputs.cache-hit != 'true'
-      uses: actions/cache@v2.1.7
+      uses: actions/cache@v3
       with:
         path: |
-          ~/gcc-arm-${{ env.toolchain-version }}-x86_64-arm-none-eabi
-          ~/gcc-arm-${{ env.toolchain-version }}-x86_64-aarch64-none-elf
+          ~/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-arm-none-eabi
+          ~/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-aarch64-none-elf
         key: cache-arm-toolchains-${{ env.toolchain-version }}
 
     - name: Update PATH
       if: steps.cache-boot-files.outputs.cache-hit != 'true'
       run: |
         for triplet in arm-none-eabi aarch64-none-elf; do
-          echo "$HOME/gcc-arm-${{ env.toolchain-version }}-x86_64-${triplet}/bin" >> $GITHUB_PATH
+          echo "$HOME/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-${triplet}/bin" >> $GITHUB_PATH
         done
 
     - name: Download boot files and build ARM stub if not retrieved from cache
@@ -151,7 +188,7 @@ jobs:
 
     - name: Cache GeneralUser GS SoundFont
       id: cache-generaluser-gs
-      uses: actions/cache@v2.1.7
+      uses: actions/cache@v3
       with:
         path: GeneralUser GS v1.511
         key: cache-generaluser-gs-1.511
@@ -164,7 +201,7 @@ jobs:
         unzip "GeneralUser GS v1.511.zip"
 
     - name: Retrieve built kernels
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: kernels
         path: sdcard
@@ -179,7 +216,7 @@ jobs:
         cp README.md sdcard/docs
 
     - name: Upload SD card archive
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: sdcard
         path: sdcard

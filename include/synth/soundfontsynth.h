@@ -2,7 +2,7 @@
 // soundfontsynth.h
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -34,7 +34,7 @@
 class CSoundFontSynth : public CSynthBase
 {
 public:
-	CSoundFontSynth(unsigned nSampleRate, float nGain = 0.2f, u32 nPolyphony = 256);
+	CSoundFontSynth(unsigned nSampleRate);
 	virtual ~CSoundFontSynth() override;
 
 	// CSynthBase
@@ -66,10 +66,9 @@ private:
 	fluid_settings_t* m_pSettings;
 	fluid_synth_t* m_pSynth;
 
+	u8 m_nVolume;
 	float m_nInitialGain;
-	float m_nCurrentGain;
 
-	u32 m_nPolyphony;
 	u16 m_nPercussionMask;
 	size_t m_nCurrentSoundFontIndex;
 

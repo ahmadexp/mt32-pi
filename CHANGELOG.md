@@ -7,6 +7,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2023-03-18
+
+### Changed
+
+- Replaced rotary encoder routines with a much more robust algorithm borrowed from [FlashFloppy](https://github.com/keirf/flashfloppy).
+- Kernels are now gzip-compressed, which saves some SD card space and may slightly reduce loading times.
+
+### Fixed
+
+- Memory corruption/crashing caused by faulty ring buffer dequeue implementation.
+- Updater: self-update URL was incorrect after the main git branch was renamed. Please manually re-download `mt32pi_updater.py`.
+
+## [0.13.0] - 2023-02-23
+
+### Added
+
+- Ability to reverse global left and right audio channels (new configuration file option) to work around broken hardware (issue #307).
+- Support for CP2104 (and possibly other members of CP210x family) USB serial devices (issue #305). Thanks to @gritd and @ajhuitsing for reporting/finding a solution!
+  * This is currently achieved by applying a temporary patch to Circle to remove a part number check in the CP2102 driver.
+
+### Changed
+
+- Update to circle-stdlib v16/Circle Step 45.1.
+- Update ARM toolchains to 11.3.rel1.
+- Update to libmt32emu v2.7.0.
+- Update to FluidSynth v2.3.1.
+- Update to inih r56.
+- Volume up/down buttons in the `simple_buttons` control scheme now repeat and accelerate when pressed and held (issue #323).
+- Updater: `config.txt` is now replaced on update, however the `avoid_warnings` setting is preserved (the only setting that matters to most users).
+- Updater: improved error handling.
+- Installer: less often-selected Wi-Fi countries have been moved to a separate list.
+
+### Fixed
+
+- Incorrect I²C clock speed with recent Raspberry Pi firmware versions (issue #292). This was caused by core clock frequency scaling by the GPU firmware. Changes to `config.txt` have been added to ensure the I²C clock is stable by locking the core frequency to 250MHz. The newer Raspberry Pi firmware has been restored.
+- Some USB MIDI controllers which make use of interrupt endpoints [would not be usable](https://github.com/rsta2/circle/issues/316) (e.g. some Novation models).
+- Installer: invalid Wi-Fi countries removed from list according to driver source.
+- Installer: if using a wpa_supplicant.conf copied from a MiSTer system, invalid lines are now removed (e.g. "ctrl_interface") as they will fail under mt32-pi.
+
+## [0.12.1] - 2022-06-14
+
+### Fixed
+
+- I²C communications failure on MiSTer introduced with newer Raspberry Pi firmware. The previous firmware version has been restored until this is resolved.
+
+## [0.12.0] - 2022-06-13
+
+### Added
+
+- Support for SSD1305 displays via a temporary hack (assume SSD1305 when `width` is set to 132). Further details in the wiki.
+- Support for WM8960 DACs (e.g. Waveshare WM8960 Audio HAT).
+
+### Changed
+
+- Update to circle-stdlib v15.13/Circle Step 44.5.
+- Update to libmt32emu v2.6.3.
+- Update to FluidSynth v2.2.7.
+- The `i2c_dac_address` and `i2c_dac_init` configuration options have been deprecated and have no longer have any effect. DACs requiring initialization are now automatically detected.
+- The `[fluidsynth.soundfont.x]` sections have now been deprecated. SoundFont effects profiles must now be stored in separate .cfg files, with the same file name as the SoundFont (minus extension). This means that file index no longer influences SoundFont settings. See `soundfonts/GeneralUser GS v1.511.cfg` for an example.
+- The maximum number of SoundFonts has been increased to 512.
+- Updater: deprecated options are now removed when merging configs.
+- Installer: missing tools (e.g. `dialog`, `jq`) are now reported if they are missing from the system.
+
+### Fixed
+
+- HDMI audio channels were reversed.
+- USB MIDI device stability improvements.
+
+## [0.11.3] - 2022-04-13
+
+### Changed
+
+- Update to inih r55.
+
+### Fixed
+
+- Ethernet connectivity was broken on some Raspberry Pi models. Thanks to Sal Bugliarisi, retro and MorkMikael for the reports!
+- Network disconnection/reconnection notifications were broken.
+
+## [0.11.2] - 2022-03-25
+
+### Added
+
+- Support for network MIDI via raw UDP socket (new configuration file option). This is compatible with [MiSTer MidiLink](https://github.com/bbond007/MiSTer_MidiLink).
+- New Bash/Python scripts for making the installation/update process easier, especially on MiSTer FPGA (see the [scripts directory](https://github.com/dwhinham/mt32-pi/tree/master/scripts) for download/information).
+
+### Changed
+
+- Update to circle-stdlib v15.12/Circle Step 44.4.1.
+- Update to FluidSynth v2.2.6.
+- Update to inih r54.
+
+## [0.11.1] - 2022-03-10
+
+### Added
+
+- Implemented RNFR/RNTO (file/directory renaming) in the FTP server.
+- Support for SSD1312 OLED displays via new horizontal mirroring configuration file option - thanks @nikitalita!
+
+### Changed
+
+- Update to libmt32emu v2.6.1.
+  * This update adds support for MT-32 ROM versions 2.06, 2.07 and CM-32LN ROM version 1.00 (CM-32LN is untested).
+- Update to FluidSynth v2.2.5.
+- MT-32 LCD emulation replaced with new libmt32emu v2.6+ display emulation.
+- FluidSynth's master volume gain is now an effects profile setting and can be overridden on a per-SoundFont basis (issue #248). Thanks to @c0d3h4x0r for the suggestion!
+
+### Fixed
+
+- A bug in the config file reader (unterminated string) could cause the last entry in the file to be read as a corrupted value if the file ended without a newline.
+- Some FTP commands could work without being logged in.
+- Some DAC accessories which make use of a hardware "mute" pin (e.g. Adafruit I²S Audio Bonnet) could be held in a muted state due to a conflict with the Blokas Pisound driver's probing routine (issue #233). The driver now resets these GPIO pins to the initial power-on state, which should fix this issue. Thanks to @htamas2 for the report!
+- Sudden loud noise caused by switching SoundFonts whilst receiving MIDI data (issue #247). Any note-on messages received whilst busy switching SoundFonts are now discarded. Thanks to @c0d3h4x0r for the report!
+
 ## [0.11.0] - 2021-12-12
 
 ### Added
@@ -140,7 +254,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Update to circle-stdlib v15.6/Circle Step 43.3.
-- Update to inih r52.
+- Update to inih r53.
 - Update to FluidSynth v2.1.8.
 - Update ARM toolchains to 10.2-2020.11.
 - Config file options are now case-insensitive.
@@ -428,7 +542,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial version.
 
-[unreleased]: https://github.com/dwhinham/mt32-pi/compare/v0.11.0..HEAD
+[unreleased]: https://github.com/dwhinham/mt32-pi/compare/v0.13.1..HEAD
+[0.13.1]: https://github.com/dwhinham/mt32-pi/compare/v0.13.0..v0.13.1
+[0.13.0]: https://github.com/dwhinham/mt32-pi/compare/v0.12.1..v0.13.0
+[0.12.1]: https://github.com/dwhinham/mt32-pi/compare/v0.12.0..v0.12.1
+[0.12.0]: https://github.com/dwhinham/mt32-pi/compare/v0.11.3..v0.12.0
+[0.11.3]: https://github.com/dwhinham/mt32-pi/compare/v0.11.2..v0.11.3
+[0.11.2]: https://github.com/dwhinham/mt32-pi/compare/v0.11.1..v0.11.2
+[0.11.1]: https://github.com/dwhinham/mt32-pi/compare/v0.11.0..v0.11.1
 [0.11.0]: https://github.com/dwhinham/mt32-pi/compare/v0.10.3..v0.11.0
 [0.10.3]: https://github.com/dwhinham/mt32-pi/compare/v0.10.2..v0.10.3
 [0.10.2]: https://github.com/dwhinham/mt32-pi/compare/v0.10.1..v0.10.2

@@ -2,7 +2,7 @@
 // power.cpp
 //
 // mt32-pi - A baremetal MIDI synthesizer for Raspberry Pi
-// Copyright (C) 2020-2021 Dale Whinham <daleyo@gmail.com>
+// Copyright (C) 2020-2023 Dale Whinham <daleyo@gmail.com>
 //
 // This file is part of mt32-pi.
 //
@@ -27,7 +27,7 @@
 
 #include "power.h"
 
-const char PowerName[] = "power";
+LOGMODULE("power");
 
 // Bits in the throttled status response
 constexpr u32 UnderVoltageOccurredBit = 1 << 16;
@@ -72,22 +72,22 @@ void CPower::Awaken()
 
 void CPower::OnEnterPowerSavingMode()
 {
-	CLogger::Get()->Write(PowerName, LogNotice, "Entering power saving mode");
+	LOGNOTE("Entering power saving mode");
 }
 
 void CPower::OnExitPowerSavingMode()
 {
-	CLogger::Get()->Write(PowerName, LogNotice, "Leaving power saving mode");
+	LOGNOTE("Leaving power saving mode");
 }
 
 void CPower::OnThrottleDetected()
 {
-	CLogger::Get()->Write(PowerName, LogWarning, "CPU throttling by firmware detected; check power supply/cooling");
+	LOGWARN("CPU throttling by firmware detected; check power supply/cooling");
 }
 
 void CPower::OnUnderVoltageDetected()
 {
-	CLogger::Get()->Write(PowerName, LogWarning, "Undervoltage detected; check power supply");
+	LOGWARN("Undervoltage detected; check power supply");
 }
 
 void CPower::UpdateThrottledStatus()
