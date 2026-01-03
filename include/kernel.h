@@ -39,10 +39,10 @@
 class CKernel : public CStdlibApp
 {
 public:
-	CKernel(void);
+	CKernel();
 
-	virtual bool Initialize(void) override;
-	TShutdownMode Run(void) override;
+	virtual bool Initialize() override;
+	TShutdownMode Run() override;
 
 protected:
 	CCPUThrottle m_CPUThrottle;

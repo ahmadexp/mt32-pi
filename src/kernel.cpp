@@ -27,7 +27,7 @@
 #define MT32_PI_VERSION "<unknown>"
 #endif
 
-CKernel::CKernel(void)
+CKernel::CKernel()
 	: CStdlibApp("mt32-pi"),
 
 	  m_Serial(&mInterrupt, true),
@@ -48,7 +48,7 @@ CKernel::CKernel(void)
 {
 }
 
-bool CKernel::Initialize(void)
+bool CKernel::Initialize()
 {
 	if (!CStdlibApp::Initialize())
 		return false;
@@ -58,14 +58,14 @@ bool CKernel::Initialize(void)
 		return false;
 #endif
 
-	const char* pLogDeviceName = mOptions.GetLogDevice();
+	const auto* pLogDeviceName = mOptions.GetLogDevice();
 	const bool bSerialMIDIAvailable = strcmp(pLogDeviceName, "ttyS1") != 0;
 
 	// Init serial port early if used for logging
 	if (!bSerialMIDIAvailable && !m_Serial.Initialize(115200))
 		return false;
 
-	CDevice* pLogTarget = mDeviceNameService.GetDevice(pLogDeviceName, false);
+	auto* pLogTarget = mDeviceNameService.GetDevice(pLogDeviceName, false);
 
 	if (!pLogTarget)
 		pLogTarget = &mNullDevice;
@@ -114,7 +114,7 @@ bool CKernel::Initialize(void)
 	return true;
 }
 
-CStdlibApp::TShutdownMode CKernel::Run(void)
+CStdlibApp::TShutdownMode CKernel::Run()
 {
 	m_Logger.Write(GetKernelName(), LogNotice, "mt32-pi " MT32_PI_VERSION);
 	m_Logger.Write(GetKernelName(), LogNotice, "Compile time: " __DATE__ " " __TIME__);
