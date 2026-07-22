@@ -2,7 +2,7 @@
 # Build configuration
 #
 
-# Valid options: pi3, pi3-64, pi4, pi4-64
+# Valid options: pi2, pi3, pi3-64, pi4, pi4-64
 BOARD?=pi3-64
 HDMI_CONSOLE?=0
 

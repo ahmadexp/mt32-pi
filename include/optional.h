@@ -24,7 +24,7 @@
 #define _optional_h
 
 #include <assert.h>
-#include <circle/new.h>
+#include <new>
 #include <circle/types.h>
 
 template<typename T>

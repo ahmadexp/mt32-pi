@@ -360,8 +360,8 @@ const TDirectoryListEntry* CFTPWorker::BuildDirectoryList(size_t& nOutEntries) c
 		for (size_t i = 0; i < nVolumes; ++i)
 		{
 			char VolumeName[6];
-			strncpy(VolumeName, VolumeNames[i], sizeof(VolumeName));
-			strcat(VolumeName, ":");
+			if (snprintf(VolumeName, sizeof(VolumeName), "%s:", VolumeNames[i]) >= static_cast<int>(sizeof(VolumeName)))
+				continue;
 
 			// Returns FR_
 			if ((Result = f_opendir(&Dir, VolumeName)) == FR_OK)
@@ -380,7 +380,7 @@ const TDirectoryListEntry* CFTPWorker::BuildDirectoryList(size_t& nOutEntries) c
 			if (VolumesAvailable[i])
 			{
 				TDirectoryListEntry& Entry = pEntries[nCurrentEntry++];
-				strncpy(Entry.Name, VolumeNames[i], sizeof(Entry.Name));
+				snprintf(Entry.Name, sizeof(Entry.Name), "%s", VolumeNames[i]);
 				Entry.Type = TDirectoryListEntryType::Directory;
 				Entry.nSize = 0;
 				Entry.nLastModifedDate = 0;
@@ -461,7 +461,13 @@ bool CFTPWorker::Port(const char* pArgs)
 		return false;
 
 	char Buffer[TextBufferSize];
-	strncpy(Buffer, pArgs, sizeof(Buffer));
+	const size_t nArgsLength = strlen(pArgs);
+	if (nArgsLength >= sizeof(Buffer))
+	{
+		SendStatus(TFTPStatus::SyntaxError, "Syntax error.");
+		return false;
+	}
+	memcpy(Buffer, pArgs, nArgsLength + 1);
 
 	if (m_pDataSocket != nullptr)
 	{
@@ -476,24 +482,28 @@ bool CFTPWorker::Port(const char* pArgs)
 	u8 PortBytes[6];
 	char* pSavePtr;
 	char* pToken = strtok_r(Buffer, " ,", &pSavePtr);
-	bool bParseError = (pToken == nullptr);
+	bool bParseError = false;
 
-	if (!bParseError)
+	for (u8 i = 0; i < Utility::ArraySize(PortBytes); ++i)
 	{
-		PortBytes[0] = static_cast<u8>(atoi(pToken));
-
-		for (u8 i = 0; i < 5; ++i)
+		if (!pToken)
 		{
-			pToken = strtok_r(nullptr, " ,", &pSavePtr);
-			if (pToken == nullptr)
-			{
-				bParseError = true;
-				break;
-			}
-
-			PortBytes[i + 1] = static_cast<u8>(atoi(pToken));
+			bParseError = true;
+			break;
 		}
+
+		char* pEnd;
+		const unsigned long nValue = strtoul(pToken, &pEnd, 10);
+		if (pEnd == pToken || *pEnd || nValue > 255)
+		{
+			bParseError = true;
+			break;
+		}
+
+		PortBytes[i] = static_cast<u8>(nValue);
+		pToken = strtok_r(nullptr, " ,", &pSavePtr);
 	}
+	bParseError |= pToken != nullptr;
 
 	if (bParseError)
 	{

@@ -38,6 +38,7 @@ public:
 protected:
 	virtual void OnEnterPowerSavingMode();
 	virtual void OnExitPowerSavingMode();
+	virtual bool IsReadyForPowerSavingMode() const;
 
 	virtual void OnThrottleDetected();
 	virtual void OnUnderVoltageDetected();
@@ -46,6 +47,7 @@ private:
 	enum class TState
 	{
 		Normal,
+		EnteringPowerSaving,
 		PowerSaving
 	};
 
@@ -53,6 +55,7 @@ private:
 
 	u16 m_nPowerSaveTimeout;
 	unsigned int m_nLastActivityTime;
+	unsigned int m_nLastThrottledStatusTime;
 	TState m_State;
 
 	CBcmPropertyTags m_Tags;

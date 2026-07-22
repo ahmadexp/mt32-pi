@@ -23,6 +23,7 @@ To those who supported this project in the past, especially whilst I was a strug
 - Add your favorite [SoundFonts][SoundFont] to expand your synthesizer with [General MIDI], [Roland GS], or even [Yamaha XG] support for endless MIDI possibilities.
 - Includes General MIDI and Roland GS support out of the box thanks to [GeneralUser GS] by S. Christian Collins.
 - No operating system, no complex Linux audio configuration; just super-low latency audio.
+- Automatic idle power management reduces CPU speed and parks inactive cores, then wakes immediately for MIDI activity.
 - Easy to configure and ready to play from cold-boot in a matter of seconds.
 - The perfect companion for your vintage PC or [MiSTer FPGA] setup.
 
@@ -72,6 +73,83 @@ Otherwise, for a manual installation:
 6. Connect a [USB MIDI interface][USB MIDI interfaces] or [GPIO MIDI circuit][GPIO MIDI interface] to the Pi, and connect some speakers to the headphone jack.
 7. Connect your vintage PC's MIDI OUT to the Pi's MIDI IN and (optionally) vice versa.
 
+## ⚡ CPU power management
+
+mt32-pi automatically enters power-saving mode after a configurable period without MIDI activity. The default timeout is 300 seconds and can be changed in `mt32-pi.cfg`:
+
+```ini
+power_save_timeout = 300
+```
+
+Set the value to `0` to disable automatic power saving. When the timeout expires, mt32-pi:
+
+- Stops the audio device cleanly before changing the CPU clock.
+- Parks the audio core and an idle display core using the processor's low-power wait-for-event instruction.
+- Reduces the CPU clock through the Raspberry Pi firmware.
+- Turns off supported LCD backlights.
+- Continues polling the MiSTer control interface when it is enabled, because that interface does not have an interrupt-driven wake path.
+
+Incoming MIDI, control-panel input, USB changes, and other registered activity restore the maximum CPU speed, restart audio, and wake parked cores. Firmware throttling and undervoltage events are also monitored and reported in the log and on an attached display.
+
+## 🛠️ Building from source
+
+The supported compiler release is [Arm GNU Toolchain] 15.2.Rel1, which provides GCC 15.2.1. CI downloads this release automatically and tests Raspberry Pi 2, Raspberry Pi 3 64-bit, and Raspberry Pi 4 64-bit builds with both the normal and HDMI consoles.
+
+### Prerequisites
+
+- Git and the repository submodules.
+- GNU Make, CMake, `patch`, and standard Unix build tools.
+- The `arm-none-eabi` toolchain for 32-bit targets.
+- The `aarch64-none-elf` toolchain for 64-bit targets.
+
+Download both toolchains from the [Arm GNU Toolchain] page and add their `bin` directories to `PATH`. For example:
+
+```bash
+export MT32PI_GCC32=/path/to/arm-gnu-toolchain-15.2.rel1-arm-none-eabi
+export MT32PI_GCC64=/path/to/arm-gnu-toolchain-15.2.rel1-aarch64-none-elf
+export PATH="$MT32PI_GCC32/bin:$MT32PI_GCC64/bin:$PATH"
+
+arm-none-eabi-gcc --version
+aarch64-none-elf-gcc --version
+```
+
+On macOS, the Circle configuration scripts also require GNU `getopt` and GNU installation tools. With Homebrew:
+
+```bash
+brew install cmake coreutils gnu-getopt
+export PATH="$(brew --prefix gnu-getopt)/bin:$PATH"
+```
+
+### Build a firmware image
+
+Initialize the dependencies once, then select a board:
+
+```bash
+make submodules
+make -j4 BOARD=pi3-64
+```
+
+Available targets and their output image names are:
+
+| `BOARD` | Architecture | Raspberry Pi | Output image |
+| --- | --- | --- | --- |
+| `pi2` | 32-bit | Pi 2 | `kernel7.img` |
+| `pi3` | 32-bit | Pi 3 / Zero 2 W | `kernel8-32.img` |
+| `pi3-64` | 64-bit | Pi 3 / Zero 2 W | `kernel8.img` |
+| `pi4` | 32-bit | Pi 4 / CM4 | `kernel7l.img` |
+| `pi4-64` | 64-bit | Pi 4 / CM4 | `kernel8-rpi4.img` |
+
+The build also produces an ELF file for debugging and an Intel HEX image for serial flashing. Kernel images are gzip-compressed by default; set `GZIP_KERNEL=0` if an uncompressed image is required.
+
+Build the HDMI-console variant by cleaning the application objects first:
+
+```bash
+make clean BOARD=pi3-64
+make -j4 BOARD=pi3-64 HDMI_CONSOLE=1
+```
+
+Use `make clean BOARD=<board>` to rebuild only mt32-pi. Use `make mrproper BOARD=<current-board>` before switching board architectures or when a completely fresh dependency build is needed.
+
 ## 📚 Documentation
 
 More detailed documentation for mt32-pi can now be found over at the [mt32-pi wiki]. Please read the wiki pages to learn about all of mt32-pi's features and supported hardware, and consider helping us improve it!
@@ -117,6 +195,7 @@ The [mt32-pi logo] was designed by and is © Dale Whinham. The terms of use for 
 - The [inih] project for a nice, lightweight config file parser.
 
 [Changelog]: https://github.com/dwhinham/mt32-pi/blob/master/CHANGELOG.md
+[Arm GNU Toolchain]: https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads
 [circle-stdlib]: https://github.com/smuehlst/circle-stdlib
 [Circle]: https://github.com/rsta2/circle
 [Configuration file]: https://github.com/dwhinham/mt32-pi/wiki/Configuration-file

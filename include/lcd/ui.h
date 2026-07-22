@@ -52,6 +52,7 @@ public:
 	void ExitPowerSavingMode();
 
 	bool IsScrolling() const { return m_bIsScrolling; }
+	bool IsInPowerSavingMode() const { return m_State == TState::InPowerSavingMode; }
 
 	static u8 CenterMessageOffset(CLCD& LCD, const char* pMessage);
 	static void DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannelLevels, float* pPeakLevels, u8 nChannels, bool bDrawBarBases);

@@ -1,0 +1,132 @@
+diff --git a/newlib/libm/complex/cargl.c b/newlib/libm/complex/cargl.c
+index 790cffe..b3178cd 100644
+--- a/newlib/libm/complex/cargl.c
++++ b/newlib/libm/complex/cargl.c
+@@ -9,0 +10,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -18,0 +21 @@ cargl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/catanl.c b/newlib/libm/complex/catanl.c
+index ee2a259..544edd7 100644
+--- a/newlib/libm/complex/catanl.c
++++ b/newlib/libm/complex/catanl.c
+@@ -35,0 +36,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -77,0 +80 @@ ovrf:
++#endif
+diff --git a/newlib/libm/complex/ccoshl.c b/newlib/libm/complex/ccoshl.c
+index f59fadf..0c54fd1 100644
+--- a/newlib/libm/complex/ccoshl.c
++++ b/newlib/libm/complex/ccoshl.c
+@@ -34,0 +35,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -45,0 +48 @@ ccoshl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/ccosl.c b/newlib/libm/complex/ccosl.c
+index c310f40..a7619f3 100644
+--- a/newlib/libm/complex/ccosl.c
++++ b/newlib/libm/complex/ccosl.c
+@@ -35,0 +36,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -45,0 +48 @@ ccosl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/cephes_subrl.c b/newlib/libm/complex/cephes_subrl.c
+index 8af11df..1d6d1b5 100644
+--- a/newlib/libm/complex/cephes_subrl.c
++++ b/newlib/libm/complex/cephes_subrl.c
+@@ -37,0 +38,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -53,0 +56 @@ _cchshl(long double x, long double *c, long double *s)
++#endif
+@@ -87,0 +91,2 @@ _redupil(long double x)
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -128,0 +134 @@ _ctansl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/cexpl.c b/newlib/libm/complex/cexpl.c
+index 8b56634..24fb40a 100644
+--- a/newlib/libm/complex/cexpl.c
++++ b/newlib/libm/complex/cexpl.c
+@@ -34,0 +35,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -46,0 +49 @@ cexpl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/clogl.c b/newlib/libm/complex/clogl.c
+index 3644a44..9befec9 100644
+--- a/newlib/libm/complex/clogl.c
++++ b/newlib/libm/complex/clogl.c
+@@ -34,0 +35,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -46,0 +49 @@ clogl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/cpowl.c b/newlib/libm/complex/cpowl.c
+index 85c2c20..46dfd13 100644
+--- a/newlib/libm/complex/cpowl.c
++++ b/newlib/libm/complex/cpowl.c
+@@ -34,0 +35,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -56,0 +59 @@ cpowl(long double complex a, long double complex z)
++#endif
+diff --git a/newlib/libm/complex/cprojl.c b/newlib/libm/complex/cprojl.c
+index e71c773..28e43ed 100644
+--- a/newlib/libm/complex/cprojl.c
++++ b/newlib/libm/complex/cprojl.c
+@@ -47,0 +48,3 @@ __RCSID("$NetBSD: cprojl.c,v 1.7 2014/10/10 00:48:18 christos Exp $");
++
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -64,0 +68 @@ cprojl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/csinhl.c b/newlib/libm/complex/csinhl.c
+index 44ed050..3187739 100644
+--- a/newlib/libm/complex/csinhl.c
++++ b/newlib/libm/complex/csinhl.c
+@@ -34,0 +35,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -45,0 +48 @@ csinhl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/csinl.c b/newlib/libm/complex/csinl.c
+index 2b96c72..2c087d5 100644
+--- a/newlib/libm/complex/csinl.c
++++ b/newlib/libm/complex/csinl.c
+@@ -35,0 +36,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -45,0 +48 @@ csinl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/csqrtl.c b/newlib/libm/complex/csqrtl.c
+index c10a126..cf9adf8 100644
+--- a/newlib/libm/complex/csqrtl.c
++++ b/newlib/libm/complex/csqrtl.c
+@@ -51,0 +52,2 @@ __RCSID("$NetBSD: csqrtl.c,v 1.2 2014/10/11 00:43:51 christos Exp $");
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -112,0 +115 @@ csqrtl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/ctanhl.c b/newlib/libm/complex/ctanhl.c
+index 1db886f..bbc4746 100644
+--- a/newlib/libm/complex/ctanhl.c
++++ b/newlib/libm/complex/ctanhl.c
+@@ -34,0 +35,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -47,0 +50 @@ ctanhl(long double complex z)
++#endif
+diff --git a/newlib/libm/complex/ctanl.c b/newlib/libm/complex/ctanl.c
+index c5c887c..9c09ca3 100644
+--- a/newlib/libm/complex/ctanl.c
++++ b/newlib/libm/complex/ctanl.c
+@@ -36,0 +37,2 @@
++/* On platforms where long double is as wide as double.  */
++#ifdef _LDBL_EQ_DBL
+@@ -56,0 +59 @@ ctanl(long double complex z)
++#endif

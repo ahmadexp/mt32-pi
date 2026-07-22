@@ -184,7 +184,11 @@ bool CConfig::ParseOption(const char* pString, CIPAddress* pOut)
 	char Buffer[16];
 	u8 IPAddress[4];
 
-	strncpy(Buffer, pString, sizeof(Buffer));
+	const size_t nLength = strlen(pString);
+	if (nLength >= sizeof(Buffer))
+		return false;
+
+	memcpy(Buffer, pString, nLength + 1);
 	char* pToken = strtok(Buffer, ".");
 
 	for (uint8_t i = 0; i < 4; ++i)
@@ -192,9 +196,16 @@ bool CConfig::ParseOption(const char* pString, CIPAddress* pOut)
 		if (!pToken)
 			return false;
 
-		IPAddress[i] = atoi(pToken);
+		char* pEnd;
+		const unsigned long nOctet = strtoul(pToken, &pEnd, 10);
+		if (pEnd == pToken || *pEnd || nOctet > 255)
+			return false;
+
+		IPAddress[i] = static_cast<u8>(nOctet);
 		pToken = strtok(nullptr, ".");
 	}
+	if (pToken)
+		return false;
 
 	pOut->Set(IPAddress);
 	return true;
