@@ -25,6 +25,7 @@
 #include <circle/sound/hdmisoundbasedevice.h>
 #include <circle/sound/i2ssoundbasedevice.h>
 #include <circle/sound/pwmsoundbasedevice.h>
+#include <circle/synchronize.h>
 
 #include <cstdarg>
 
@@ -45,7 +46,7 @@ constexpr u32 MisterUpdatePeriodMillis             = 50;
 constexpr u32 LEDTimeoutMillis                     = 50;
 constexpr u32 ActiveSenseTimeoutMillis             = 330;
 
-constexpr float Sample24BitMax = (1 << 24 - 1) - 1;
+constexpr float Sample24BitMax = (1 << 23) - 1;
 
 enum class TCustomSysExCommand : u8
 {
@@ -110,6 +111,9 @@ CMT32Pi::CMT32Pi(CI2CMaster* pI2CMaster, CSPIMaster* pSPIMaster, CInterruptSyste
 
 	  m_bRunning(true),
 	  m_bUITaskDone(false),
+	  m_bPowerSaveRequested(false),
+	  m_bUITaskParked(false),
+	  m_bAudioTaskParked(false),
 	  m_bLEDOn(false),
 	  m_nLEDOnTime(0),
 
@@ -525,6 +529,17 @@ void CMT32Pi::UITask()
 			m_nLCDUpdateTime = nTicks;
 		}
 
+		// Keep updating long enough to show the power-saving message and turn
+		// off the backlight, then stop this core until activity resumes.
+		// MiSTer control must keep polling because it has no interrupt-driven
+		// wake-up path. The core clock is fixed in config.txt, so its I2C baud
+		// rate remains stable while the ARM clock is reduced.
+		if (!bMisterEnabled && m_bPowerSaveRequested && (!m_pLCD || m_UserInterface.IsInPowerSavingMode()))
+		{
+			ParkCurrentCore(m_bUITaskParked);
+			continue;
+		}
+
 		// Poll MiSTer interface
 		if (bMisterEnabled && (nTicks - m_nMisterUpdateTime) >= Utility::MillisToTicks(MisterUpdatePeriodMillis))
 		{
@@ -569,10 +584,16 @@ void CMT32Pi::AudioTask()
 
 	// Extra byte so that we can write to the 24-bit buffer with overlapping 32-bit writes (efficiency)
 	float FloatBuffer[nQueueSizeFrames * nChannels];
-	s8 IntBuffer[nQueueSizeFrames * nBytesPerFrame + bI2S ? 0 : 1];
+	s8 IntBuffer[nQueueSizeFrames * nBytesPerFrame + (bI2S ? 0 : 1)];
 
 	while (m_bRunning)
 	{
+		if (m_bPowerSaveRequested)
+		{
+			ParkCurrentCore(m_bAudioTaskParked);
+			continue;
+		}
+
 		const size_t nFrames = nQueueSizeFrames - m_pSound->GetQueueFramesAvail();
 		const size_t nWriteBytes = nFrames * nBytesPerFrame;
 
@@ -605,6 +626,29 @@ void CMT32Pi::AudioTask()
 	}
 }
 
+void CMT32Pi::ParkCurrentCore(volatile bool& bTaskParked)
+{
+	bTaskParked = true;
+	DataMemBarrier();
+	SendEvent();
+
+	while (m_bPowerSaveRequested && m_bRunning)
+	{
+		WaitForEvent();
+		DataMemBarrier();
+	}
+
+	bTaskParked = false;
+	DataMemBarrier();
+}
+
+void CMT32Pi::StopTasks()
+{
+	m_bRunning = false;
+	DataMemBarrier();
+	SendEvent();
+}
+
 void CMT32Pi::Run(unsigned nCore)
 {
 	// Assign tasks to different CPU cores
@@ -627,8 +671,13 @@ void CMT32Pi::Run(unsigned nCore)
 void CMT32Pi::OnEnterPowerSavingMode()
 {
 	CPower::OnEnterPowerSavingMode();
-	m_pSound->Cancel();
 	m_UserInterface.EnterPowerSavingMode();
+
+	m_bPowerSaveRequested = true;
+	DataMemBarrier();
+	SendEvent();
+
+	m_pSound->Cancel();
 }
 
 void CMT32Pi::OnExitPowerSavingMode()
@@ -636,6 +685,18 @@ void CMT32Pi::OnExitPowerSavingMode()
 	CPower::OnExitPowerSavingMode();
 	m_pSound->Start();
 	m_UserInterface.ExitPowerSavingMode();
+
+	DataMemBarrier();
+	m_bPowerSaveRequested = false;
+	DataMemBarrier();
+	SendEvent();
+}
+
+bool CMT32Pi::IsReadyForPowerSavingMode() const
+{
+	DataMemBarrier();
+	const bool bUIReady = m_pConfig->ControlMister || m_bUITaskDone || m_bUITaskParked;
+	return m_bAudioTaskParked && bUIReady && !m_pSound->IsActive();
 }
 
 void CMT32Pi::OnThrottleDetected()
@@ -679,7 +740,8 @@ void CMT32Pi::OnSysExMessage(const u8* pData, size_t nSize)
 		m_pCurrentSynth->HandleMIDISysExMessage(pData, nSize);
 
 	// Wake from power saving mode if necessary
-	Awaken();
+	if (m_bRunning)
+		Awaken();
 }
 
 void CMT32Pi::OnUnexpectedStatus()
@@ -726,7 +788,7 @@ bool CMT32Pi::ParseCustomSysEx(const u8* pData, size_t nSize)
 	if (nSize == 4 && Command == TCustomSysExCommand::Reboot)
 	{
 		LOGNOTE("Reboot command received");
-		m_bRunning = false;
+		StopTasks();
 		return true;
 	}
 
@@ -1296,8 +1358,8 @@ void CMT32Pi::PanicHandler()
 	if (!s_pThis || !s_pThis->m_pLCD)
 		return;
 
-	// Kill UI task
-	s_pThis->m_bRunning = false;
+	// Stop the other tasks
+	s_pThis->StopTasks();
 	while (!s_pThis->m_bUITaskDone)
 		;
 

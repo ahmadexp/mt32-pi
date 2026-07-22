@@ -91,6 +91,7 @@ private:
 	// CPower
 	virtual void OnEnterPowerSavingMode() override;
 	virtual void OnExitPowerSavingMode() override;
+	virtual bool IsReadyForPowerSavingMode() const override;
 	virtual void OnThrottleDetected() override;
 	virtual void OnUnderVoltageDetected() override;
 
@@ -117,6 +118,8 @@ private:
 	void MainTask();
 	void UITask();
 	void AudioTask();
+	void ParkCurrentCore(volatile bool& bTaskParked);
+	void StopTasks();
 
 	void UpdateUSB(bool bStartup = false);
 	void UpdateNetwork();
@@ -198,6 +201,9 @@ private:
 
 	volatile bool m_bRunning;
 	volatile bool m_bUITaskDone;
+	volatile bool m_bPowerSaveRequested;
+	volatile bool m_bUITaskParked;
+	volatile bool m_bAudioTaskParked;
 	bool m_bLEDOn;
 	unsigned m_nLEDOnTime;
 

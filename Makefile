@@ -42,6 +42,7 @@ $(CIRCLE_STDLIB_CONFIG) $(CIRCLE_CONFIG)&:
 	$(CIRCLESTDLIBHOME)/configure --raspberrypi=$(RASPBERRYPI) --prefix=$(PREFIX)
 
 # Apply patches
+	@${APPLY_PATCH} $(CIRCLESTDLIBHOME)/libs/circle-newlib patches/circle-newlib-3.1-aarch64-long-double.patch
 	@${APPLY_PATCH} $(CIRCLEHOME) patches/circle-45-minimal-usb-drivers.patch
 	@${APPLY_PATCH} $(CIRCLEHOME) patches/circle-45-cp210x-remove-partnum-check.patch
 	@${APPLY_PATCH} $(CIRCLEHOME) patches/circle-45-gzip-kernel.patch
@@ -80,15 +81,17 @@ mt32emu: $(MT32EMUBUILDDIR)/.done
 $(MT32EMUBUILDDIR)/.done: $(CIRCLESTDLIBHOME)/.done
 	@CFLAGS="$(CFLAGS_EXTERNAL)" \
 	CXXFLAGS="$(CFLAGS_EXTERNAL)" \
+	CMAKE_POLICY_VERSION_MINIMUM=3.5 \
 	cmake -B $(MT32EMUBUILDDIR) \
 		 $(CMAKE_TOOLCHAIN_FLAGS) \
+		 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
 		 -DCMAKE_CXX_FLAGS_RELEASE="-Ofast" \
 		 -DCMAKE_BUILD_TYPE=Release \
 		 -Dlibmt32emu_C_INTERFACE=FALSE \
 		 -Dlibmt32emu_SHARED=FALSE \
 		 $(MT32EMUHOME) \
 		 >/dev/null
-	@cmake --build $(MT32EMUBUILDDIR)
+	@CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake --build $(MT32EMUBUILDDIR)
 	@touch $@
 
 #
@@ -100,8 +103,10 @@ $(FLUIDSYNTHBUILDDIR)/.done: $(CIRCLESTDLIBHOME)/.done
 	@${APPLY_PATCH} $(FLUIDSYNTHHOME) patches/fluidsynth-2.3.1-circle.patch
 
 	@CFLAGS="$(CFLAGS_EXTERNAL)" \
+	CMAKE_POLICY_VERSION_MINIMUM=3.5 \
 	cmake -B $(FLUIDSYNTHBUILDDIR) \
 		 $(CMAKE_TOOLCHAIN_FLAGS) \
+		 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
 		 -DCMAKE_C_FLAGS_RELEASE="-Ofast -fopenmp-simd" \
 		 -DCMAKE_BUILD_TYPE=Release \
 		 -DBUILD_SHARED_LIBS=OFF \
@@ -129,7 +134,7 @@ $(FLUIDSYNTHBUILDDIR)/.done: $(CIRCLESTDLIBHOME)/.done
 		 -Denable-winmidi=OFF \
 		 $(FLUIDSYNTHHOME) \
 		 >/dev/null
-	@cmake --build $(FLUIDSYNTHBUILDDIR) --target libfluidsynth
+	@CMAKE_POLICY_VERSION_MINIMUM=3.5 cmake --build $(FLUIDSYNTHBUILDDIR) --target libfluidsynth
 	@touch $@
 
 #
@@ -152,10 +157,11 @@ mrproper: clean
 	@${REVERSE_PATCH} $(CIRCLEHOME) patches/circle-45-gzip-kernel.patch
 	@${REVERSE_PATCH} $(CIRCLEHOME) patches/circle-45-cp210x-remove-partnum-check.patch
 	@${REVERSE_PATCH} $(CIRCLEHOME) patches/circle-45-minimal-usb-drivers.patch
+	@${REVERSE_PATCH} $(CIRCLESTDLIBHOME)/libs/circle-newlib patches/circle-newlib-3.1-aarch64-long-double.patch
 	@${REVERSE_PATCH} $(FLUIDSYNTHHOME) patches/fluidsynth-2.3.1-circle.patch
 
 # Clean circle-stdlib
-	@if [ -f $(CIRCLE_STDLIB_CONFIG) ]; then $(MAKE) -C $(CIRCLESTDLIBHOME) mrproper; fi
+	@if [ -f $(CIRCLE_STDLIB_CONFIG) ]; then $(MAKE) -C $(CIRCLESTDLIBHOME) mrproper CHECK_DEPS=0; fi
 	@$(RM) $(CIRCLESTDLIBHOME)/.done
 
 # Clean mt32emu

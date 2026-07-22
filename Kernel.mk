@@ -91,3 +91,11 @@ VERSION=$(shell git describe --tags --dirty --always 2>/dev/null)
 ifneq ($(VERSION),)
 DEFINE		+=	-D MT32_PI_VERSION=\"$(VERSION)\"
 endif
+
+# GCC 14 and later gate standard libstdc++ headers (including <string> and
+# <fstream>) behind __STDC_HOSTED__. circle-stdlib provides the required C/C++
+# runtime, so omit -ffreestanding for application C++ sources while retaining
+# Circle's bare-metal linker and runtime configuration. The overload warning
+# originates in circle-stdlib's compatibility application class hierarchy.
+CPPFLAGS	:=	$(filter-out -ffreestanding,$(CPPFLAGS))
+CPPFLAGS	+=	-Wno-overloaded-virtual
