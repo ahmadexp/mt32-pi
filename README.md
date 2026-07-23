@@ -1,9 +1,4 @@
-
-
-<h1 align="center">
-    <img width="90%" title="mt32-pi - Baremetal synthesizer system" src="images/mt32pi_logo.svg">
-</h1>
-
+This is a fork of mt32-pi with a lot of improvements and many more to come.
 mt32-pi is a bare-metal MIDI synthesizer for Raspberry Pi. It runs without a general-purpose operating system and combines [Munt] MT-32 emulation with [FluidSynth] SoundFont synthesis on the [Circle] framework.
 
 The firmware provides low-latency MIDI synthesis for vintage computers, [MiSTer FPGA], and standalone MIDI controllers. It supports MT-32/CM-32L ROM sets, [General MIDI], [Roland GS], [Yamaha XG], and user-supplied [SoundFonts][SoundFont].
