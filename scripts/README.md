@@ -79,8 +79,8 @@ A wrapper script ([`mt32pi_updater.sh`]) is provided so that it can be launched 
 
 > ⚠️ **Note:** If mt32-pi cannot be reached by hostname (e.g. the script cannot connect or `ping mt32-pi` fails), you may have an issue with DNS resolution within your LAN. Check your router's DNS/DHCP settings, or try using an IP address instead of a hostname instead.
 
-[Embedded FTP server]: https://github.com/dwhinham/mt32-pi/wiki/Embedded-FTP-server
-[Networking]: https://github.com/dwhinham/mt32-pi/wiki/Networking
+[Embedded FTP server]: https://github.com/ahmadexp/mt32-pi/wiki/Embedded-FTP-server
+[Networking]: https://github.com/ahmadexp/mt32-pi/wiki/Networking
 [`mt32pi_installer.sh`]: mt32pi_installer.sh?raw=1
 [`mt32pi_updater.py`]: mt32pi_updater.py?raw=1
 [`mt32pi_updater.cfg`]: mt32pi_updater.cfg?raw=1

@@ -1,6 +1,12 @@
 name: mt32-pi CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,6 +18,8 @@ concurrency:
 env:
   toolchain-version: 15.2.rel1
   python-version: 3.11
+  generaluser-version: 2.0.3
+  generaluser-revision: 684543d5e5efaef08d02be50dcda8d552478fa60
 
 jobs:
   lint:
@@ -209,15 +217,25 @@ jobs:
       id: cache-generaluser-gs
       uses: actions/cache@v6
       with:
-        path: GeneralUser GS v1.511
-        key: cache-generaluser-gs-1.511
+        path: generaluser-gs
+        key: cache-generaluser-gs-${{ env.generaluser-version }}-${{ env.generaluser-revision }}
 
     - name: Download GeneralUser GS SoundFont if not retrieved from cache
       if: steps.cache-generaluser-gs.outputs.cache-hit != 'true'
       run: |
-        sudo pip install gdown
-        gdown -q https://drive.google.com/uc?id=1ypgJwuHqqXx-jeCXLRFqgBAEemJZnDrj
-        unzip "GeneralUser GS v1.511.zip"
+        mkdir generaluser-gs
+        base_url="https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/${{ env.generaluser-revision }}"
+        curl --fail --location --retry 3 --output generaluser-gs/GeneralUser-GS.sf2 "$base_url/GeneralUser-GS.sf2"
+        curl --fail --location --retry 3 --output generaluser-gs/CHANGELOG.md "$base_url/documentation/CHANGELOG.md"
+        curl --fail --location --retry 3 --output generaluser-gs/LICENSE.txt "$base_url/documentation/LICENSE.txt"
+
+    - name: Verify GeneralUser GS SoundFont
+      run: |
+        printf '%s  %s\n' \
+          9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe generaluser-gs/GeneralUser-GS.sf2 \
+          2ed3138c31d43c8a36e106703679e3ec88bf579da7c34051bd9531ec08939b44 generaluser-gs/CHANGELOG.md \
+          7b32efefdf95ce38a043799f0659853ddc00fbaa14d8c50f0aca16b9b8b405be generaluser-gs/LICENSE.txt \
+          | sha256sum --check --strict
 
     - name: Retrieve built kernels
       uses: actions/download-artifact@v8
@@ -229,9 +247,9 @@ jobs:
     - name: Add extra files to SD card directory
       run: |
         mkdir sdcard/docs
-        cp "GeneralUser GS v1.511/GeneralUser GS v1.511.sf2" sdcard/soundfonts
-        cp "GeneralUser GS v1.511/CHANGELOG.md" sdcard/docs/CHANGELOG.GeneralUserGS
-        cp "GeneralUser GS v1.511/LICENSE.txt" sdcard/docs/LICENSE.GeneralUserGS
+        cp generaluser-gs/GeneralUser-GS.sf2 sdcard/soundfonts
+        cp generaluser-gs/CHANGELOG.md sdcard/docs/CHANGELOG.GeneralUserGS
+        cp generaluser-gs/LICENSE.txt sdcard/docs/LICENSE.GeneralUserGS
         cp LICENSE sdcard/docs
         cp README.md sdcard/docs
 

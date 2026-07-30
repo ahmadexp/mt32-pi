@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Application sources now build as C++20 and use `std::optional` instead of the custom optional implementation.
 - Configuration and SoundFont profile files are read into bounded heap buffers instead of variable-length core-stack arrays.
 - GitHub Actions now use current Node 24-based actions and immutable, per-board build artifacts.
+- The bundled GeneralUser GS SoundFont is updated to 2.0.3 and downloaded reproducibly from a pinned upstream revision with checksum verification.
 
 ### Fixed
 
@@ -106,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Support for network MIDI via raw UDP socket (new configuration file option). This is compatible with [MiSTer MidiLink](https://github.com/bbond007/MiSTer_MidiLink).
-- New Bash/Python scripts for making the installation/update process easier, especially on MiSTer FPGA (see the [scripts directory](https://github.com/dwhinham/mt32-pi/tree/master/scripts) for download/information).
+- New Bash/Python scripts for making the installation/update process easier, especially on MiSTer FPGA (see the [scripts directory](https://github.com/ahmadexp/mt32-pi/tree/master/scripts) for download/information).
 
 ### Changed
 
@@ -557,36 +558,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial version.
 
-[unreleased]: https://github.com/dwhinham/mt32-pi/compare/v0.13.1..HEAD
-[0.13.1]: https://github.com/dwhinham/mt32-pi/compare/v0.13.0..v0.13.1
-[0.13.0]: https://github.com/dwhinham/mt32-pi/compare/v0.12.1..v0.13.0
-[0.12.1]: https://github.com/dwhinham/mt32-pi/compare/v0.12.0..v0.12.1
-[0.12.0]: https://github.com/dwhinham/mt32-pi/compare/v0.11.3..v0.12.0
-[0.11.3]: https://github.com/dwhinham/mt32-pi/compare/v0.11.2..v0.11.3
-[0.11.2]: https://github.com/dwhinham/mt32-pi/compare/v0.11.1..v0.11.2
-[0.11.1]: https://github.com/dwhinham/mt32-pi/compare/v0.11.0..v0.11.1
-[0.11.0]: https://github.com/dwhinham/mt32-pi/compare/v0.10.3..v0.11.0
-[0.10.3]: https://github.com/dwhinham/mt32-pi/compare/v0.10.2..v0.10.3
-[0.10.2]: https://github.com/dwhinham/mt32-pi/compare/v0.10.1..v0.10.2
-[0.10.1]: https://github.com/dwhinham/mt32-pi/compare/v0.10.0..v0.10.1
-[0.10.0]: https://github.com/dwhinham/mt32-pi/compare/v0.9.1..v0.10.0
-[0.9.1]: https://github.com/dwhinham/mt32-pi/compare/v0.9.0..v0.9.1
-[0.9.0]: https://github.com/dwhinham/mt32-pi/compare/v0.8.5..v0.9.0
-[0.8.5]: https://github.com/dwhinham/mt32-pi/compare/v0.8.4..v0.8.5
-[0.8.4]: https://github.com/dwhinham/mt32-pi/compare/v0.8.3..v0.8.4
-[0.8.3]: https://github.com/dwhinham/mt32-pi/compare/v0.8.2..v0.8.3
-[0.8.2]: https://github.com/dwhinham/mt32-pi/compare/v0.8.1..v0.8.2
-[0.8.1]: https://github.com/dwhinham/mt32-pi/compare/v0.8.0..v0.8.1
-[0.8.0]: https://github.com/dwhinham/mt32-pi/compare/v0.7.1..v0.8.0
-[0.7.1]: https://github.com/dwhinham/mt32-pi/compare/v0.7.0..v0.7.1
-[0.7.0]: https://github.com/dwhinham/mt32-pi/compare/v0.6.2..v0.7.0
-[0.6.2]: https://github.com/dwhinham/mt32-pi/compare/v0.6.1..v0.6.2
-[0.6.1]: https://github.com/dwhinham/mt32-pi/compare/v0.6.0..v0.6.1
-[0.6.0]: https://github.com/dwhinham/mt32-pi/compare/v0.5.0..v0.6.0
-[0.5.0]: https://github.com/dwhinham/mt32-pi/compare/v0.4.0..v0.5.0
-[0.4.0]: https://github.com/dwhinham/mt32-pi/compare/v0.3.1..v0.4.0
-[0.3.1]: https://github.com/dwhinham/mt32-pi/compare/v0.3.0..v0.3.1
-[0.3.0]: https://github.com/dwhinham/mt32-pi/compare/v0.2.1..v0.3.0
-[0.2.1]: https://github.com/dwhinham/mt32-pi/compare/v0.2.0..v0.2.1
-[0.2.0]: https://github.com/dwhinham/mt32-pi/compare/v0.1.0..v0.2.0
-[0.1.0]: https://github.com/dwhinham/mt32-pi/releases/tag/v0.1.0
+[unreleased]: https://github.com/ahmadexp/mt32-pi/compare/v0.13.1..HEAD
+[0.13.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.13.0..v0.13.1
+[0.13.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.12.1..v0.13.0
+[0.12.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.12.0..v0.12.1
+[0.12.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.11.3..v0.12.0
+[0.11.3]: https://github.com/ahmadexp/mt32-pi/compare/v0.11.2..v0.11.3
+[0.11.2]: https://github.com/ahmadexp/mt32-pi/compare/v0.11.1..v0.11.2
+[0.11.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.11.0..v0.11.1
+[0.11.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.10.3..v0.11.0
+[0.10.3]: https://github.com/ahmadexp/mt32-pi/compare/v0.10.2..v0.10.3
+[0.10.2]: https://github.com/ahmadexp/mt32-pi/compare/v0.10.1..v0.10.2
+[0.10.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.10.0..v0.10.1
+[0.10.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.9.1..v0.10.0
+[0.9.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.9.0..v0.9.1
+[0.9.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.8.5..v0.9.0
+[0.8.5]: https://github.com/ahmadexp/mt32-pi/compare/v0.8.4..v0.8.5
+[0.8.4]: https://github.com/ahmadexp/mt32-pi/compare/v0.8.3..v0.8.4
+[0.8.3]: https://github.com/ahmadexp/mt32-pi/compare/v0.8.2..v0.8.3
+[0.8.2]: https://github.com/ahmadexp/mt32-pi/compare/v0.8.1..v0.8.2
+[0.8.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.8.0..v0.8.1
+[0.8.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.7.1..v0.8.0
+[0.7.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.7.0..v0.7.1
+[0.7.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.6.2..v0.7.0
+[0.6.2]: https://github.com/ahmadexp/mt32-pi/compare/v0.6.1..v0.6.2
+[0.6.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.6.0..v0.6.1
+[0.6.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.5.0..v0.6.0
+[0.5.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.4.0..v0.5.0
+[0.4.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.3.1..v0.4.0
+[0.3.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.3.0..v0.3.1
+[0.3.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.2.1..v0.3.0
+[0.2.1]: https://github.com/ahmadexp/mt32-pi/compare/v0.2.0..v0.2.1
+[0.2.0]: https://github.com/ahmadexp/mt32-pi/compare/v0.1.0..v0.2.0
+[0.1.0]: https://github.com/ahmadexp/mt32-pi/releases/tag/v0.1.0
