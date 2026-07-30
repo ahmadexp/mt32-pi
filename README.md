@@ -147,7 +147,7 @@ Use `make clean BOARD=<board>` to rebuild only mt32-pi. Use `make mrproper BOARD
 - [FluidSynth] provides SoundFont synthesis.
 - [Circle] and [circle-stdlib] provide the bare-metal Raspberry Pi runtime.
 - [inih] provides configuration-file parsing.
-- [GeneralUser GS] provides the bundled General MIDI/Roland GS SoundFont.
+- [GeneralUser GS] 2.0.3 provides the bundled General MIDI/Roland GS SoundFont.
 
 ## License
 
@@ -161,7 +161,7 @@ The source code is licensed under the [GNU General Public License v3.0][license]
 [FluidSynth]: http://www.fluidsynth.org
 [FTP server]: https://github.com/dwhinham/mt32-pi/wiki/Embedded-FTP-server
 [General MIDI]: https://en.wikipedia.org/wiki/General_MIDI
-[GeneralUser GS]: http://schristiancollins.com/generaluser.php
+[GeneralUser GS]: https://schristiancollins.com/generaluser
 [GPIO MIDI interface]: https://github.com/dwhinham/mt32-pi/wiki/GPIO-MIDI-interface
 [I²S Hi-Fi DACs]: https://github.com/dwhinham/mt32-pi/wiki/I%C2%B2S-DACs
 [inih]: https://github.com/benhoyt/inih

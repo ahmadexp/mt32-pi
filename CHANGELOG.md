@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Application sources now build as C++20 and use `std::optional` instead of the custom optional implementation.
 - Configuration and SoundFont profile files are read into bounded heap buffers instead of variable-length core-stack arrays.
 - GitHub Actions now use current Node 24-based actions and immutable, per-board build artifacts.
+- The bundled GeneralUser GS SoundFont is updated to 2.0.3 and downloaded reproducibly from a pinned upstream revision with checksum verification.
 
 ### Fixed
 

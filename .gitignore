@@ -3,6 +3,10 @@ build-*
 sdcard/*
 !sdcard/*.cfg
 !sdcard/*.txt
+!sdcard/soundfonts/
+sdcard/soundfonts/*
+!sdcard/soundfonts/*.cfg
+!sdcard/soundfonts/*.txt
 
 # macOS metadata
 .DS_Store
