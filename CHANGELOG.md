@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MIDI active-sensing timeouts now remain correct across timer wraparound.
 - Roland SysEx checksum generation now returns zero for a zero sum.
 - Bounds and termination handling for display SysEx, AppleMIDI session names, FTP responses, and panic log parsing.
+- FluidSynth cross-build configuration no longer requires unused host GLib development packages.
 
 ## [0.13.1] - 2023-03-18
 

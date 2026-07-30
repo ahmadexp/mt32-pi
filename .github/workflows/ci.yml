@@ -48,10 +48,20 @@ jobs:
     - name: Fetch submodules
       run: make submodules
 
-    - name: Setup ccache
-      uses: hendrikmuhs/ccache-action@v1.2
+    - name: Cache compiler outputs
+      uses: actions/cache@v6
       with:
-        key: ${{ env.toolchain-version }}-${{ matrix.board }}
+        path: ~/.cache/ccache
+        key: ccache-${{ env.toolchain-version }}-${{ matrix.board }}-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ env.toolchain-version }}-${{ matrix.board }}-
+
+    - name: Install ccache
+      run: |
+        if ! command -v ccache >/dev/null; then
+          sudo apt-get update
+          sudo apt-get install --yes ccache
+        fi
 
     - name: Cache ARM toolchains
       id: cache-toolchains
