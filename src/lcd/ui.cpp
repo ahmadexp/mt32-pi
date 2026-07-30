@@ -155,7 +155,7 @@ void CUserInterface::ShowSystemMessage(const char* pMessage, bool bSpinner)
 	}
 	else
 	{
-		snprintf(m_SystemMessageTextBuffer, sizeof(m_SystemMessageTextBuffer), pMessage);
+		snprintf(m_SystemMessageTextBuffer, sizeof(m_SystemMessageTextBuffer), "%s", pMessage);
 		m_State = TState::DisplayingMessage;
 	}
 
@@ -179,6 +179,9 @@ void CUserInterface::DisplayImage(TImage Image)
 
 void CUserInterface::ShowSysExText(TSysExDisplayMessage Type, const u8* pMessage, size_t nSize, u8 nOffset)
 {
+	if (nOffset >= SyxExTextBufferSize - 1)
+		return;
+
 	if (nOffset + nSize > SyxExTextBufferSize - 1)
 		nSize = SyxExTextBufferSize - 1 - nOffset;
 
@@ -251,7 +254,10 @@ void CUserInterface::DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannel
 void CUserInterface::DrawChannelLevelsCharacter(CLCD& LCD, u8 nRows, u8 nBarOffsetX, u8 nBarYOffset, u8 nBarSpacing, const float* pChannelLevels, u8 nChannels, bool bDrawBarBases)
 {
 	const u8 nWidth = LCD.Width();
-	char LineBuf[nRows][nWidth + 1];
+	if (nRows == 0 || nRows > MaxCharacterLCDHeight || nWidth > MaxCharacterLCDWidth)
+		return;
+
+	char LineBuf[MaxCharacterLCDHeight][MaxCharacterLCDWidth + 1];
 	const u8 nBarHeight = nRows * 8;
 
 	// Initialize with ASCII spaces

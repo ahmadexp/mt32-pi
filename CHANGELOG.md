@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The audio core now sleeps until the hardware queue needs data, renders larger batches, and uses aligned 24-in-32-bit samples for all output devices.
+- Application sources now build as C++20 and use `std::optional` instead of the custom optional implementation.
+- Configuration and SoundFont profile files are read into bounded heap buffers instead of variable-length core-stack arrays.
+- GitHub Actions now use current Node 24-based actions and immutable, per-board build artifacts.
+
+### Fixed
+
+- Strict numeric and range validation now rejects malformed or unsafe configuration values.
+- MIDI active-sensing timeouts now remain correct across timer wraparound.
+- Roland SysEx checksum generation now returns zero for a zero sum.
+- Bounds and termination handling for display SysEx, AppleMIDI session names, FTP responses, and panic log parsing.
+- FluidSynth cross-build configuration no longer requires unused host GLib development packages.
+
 ## [0.13.1] - 2023-03-18
 
 ### Changed

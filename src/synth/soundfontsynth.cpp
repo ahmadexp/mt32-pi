@@ -397,21 +397,21 @@ bool CSoundFontSynth::Reinitialize(const char* pSoundFontPath, const TFXProfile*
 
 	fluid_synth_set_polyphony(m_pSynth, pConfig->FluidSynthPolyphony);
 
-	m_nInitialGain = pFXProfile->nGain.ValueOr(pConfig->FluidSynthDefaultGain);
+	m_nInitialGain = pFXProfile->nGain.value_or(pConfig->FluidSynthDefaultGain);
 	fluid_synth_set_gain(m_pSynth, m_nVolume / 100.0f * m_nInitialGain);
 
 	// Use values from effects profile if set, otherwise use defaults
-	fluid_synth_reverb_on(m_pSynth, -1, pFXProfile->bReverbActive.ValueOr(pConfig->FluidSynthDefaultReverbActive));
-	fluid_synth_set_reverb_group_damp(m_pSynth, -1, pFXProfile->nReverbDamping.ValueOr(pConfig->FluidSynthDefaultReverbDamping));
-	fluid_synth_set_reverb_group_level(m_pSynth, -1, pFXProfile->nReverbLevel.ValueOr(pConfig->FluidSynthDefaultReverbLevel));
-	fluid_synth_set_reverb_group_roomsize(m_pSynth, -1, pFXProfile->nReverbRoomSize.ValueOr(pConfig->FluidSynthDefaultReverbRoomSize));
-	fluid_synth_set_reverb_group_width(m_pSynth, -1, pFXProfile->nReverbWidth.ValueOr(pConfig->FluidSynthDefaultReverbWidth));
+	fluid_synth_reverb_on(m_pSynth, -1, pFXProfile->bReverbActive.value_or(pConfig->FluidSynthDefaultReverbActive));
+	fluid_synth_set_reverb_group_damp(m_pSynth, -1, pFXProfile->nReverbDamping.value_or(pConfig->FluidSynthDefaultReverbDamping));
+	fluid_synth_set_reverb_group_level(m_pSynth, -1, pFXProfile->nReverbLevel.value_or(pConfig->FluidSynthDefaultReverbLevel));
+	fluid_synth_set_reverb_group_roomsize(m_pSynth, -1, pFXProfile->nReverbRoomSize.value_or(pConfig->FluidSynthDefaultReverbRoomSize));
+	fluid_synth_set_reverb_group_width(m_pSynth, -1, pFXProfile->nReverbWidth.value_or(pConfig->FluidSynthDefaultReverbWidth));
 
-	fluid_synth_chorus_on(m_pSynth, -1, pFXProfile->bChorusActive.ValueOr(pConfig->FluidSynthDefaultChorusActive));
-	fluid_synth_set_chorus_group_depth(m_pSynth, -1, pFXProfile->nChorusDepth.ValueOr(pConfig->FluidSynthDefaultChorusDepth));
-	fluid_synth_set_chorus_group_level(m_pSynth, -1, pFXProfile->nChorusLevel.ValueOr(pConfig->FluidSynthDefaultChorusLevel));
-	fluid_synth_set_chorus_group_nr(m_pSynth, -1, pFXProfile->nChorusVoices.ValueOr(pConfig->FluidSynthDefaultChorusVoices));
-	fluid_synth_set_chorus_group_speed(m_pSynth, -1, pFXProfile->nChorusSpeed.ValueOr(pConfig->FluidSynthDefaultChorusSpeed));
+	fluid_synth_chorus_on(m_pSynth, -1, pFXProfile->bChorusActive.value_or(pConfig->FluidSynthDefaultChorusActive));
+	fluid_synth_set_chorus_group_depth(m_pSynth, -1, pFXProfile->nChorusDepth.value_or(pConfig->FluidSynthDefaultChorusDepth));
+	fluid_synth_set_chorus_group_level(m_pSynth, -1, pFXProfile->nChorusLevel.value_or(pConfig->FluidSynthDefaultChorusLevel));
+	fluid_synth_set_chorus_group_nr(m_pSynth, -1, pFXProfile->nChorusVoices.value_or(pConfig->FluidSynthDefaultChorusVoices));
+	fluid_synth_set_chorus_group_speed(m_pSynth, -1, pFXProfile->nChorusSpeed.value_or(pConfig->FluidSynthDefaultChorusSpeed));
 
 #ifndef NDEBUG
 	DumpFXSettings();

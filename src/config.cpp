@@ -20,7 +20,11 @@
 // mt32-pi. If not, see <http://www.gnu.org/licenses/>.
 //
 
+#include <cerrno>
+#include <cmath>
 #include <cstdlib>
+#include <limits>
+#include <memory>
 
 #include <circle/logger.h>
 #include <circle/util.h>
@@ -33,6 +37,7 @@
 LOGMODULE("config");
 const char* TrueStrings[]  = {"true", "on", "1"};
 const char* FalseStrings[] = {"false", "off", "0"};
+constexpr size_t MaxConfigFileSize = 64 * 1024;
 
 // Templated function that converts a string to an enum
 template <class T, const char* pEnumStrings[], size_t N> static bool ParseEnum(const char* pString, T* pOut)
@@ -89,28 +94,42 @@ bool CConfig::Initialize(const char* pPath)
 		return false;
 	}
 
-	// +1 byte for null terminator
-	const UINT nSize = f_size(&File);
-	char Buffer[nSize + 1];
+	const FSIZE_t nFileSize = f_size(&File);
+	if (nFileSize > MaxConfigFileSize)
+	{
+		LOGERR("Config file '%s' is too large", pPath);
+		f_close(&File);
+		return false;
+	}
+
+	// Keep user-controlled file sizes off the core stack.
+	const UINT nSize = static_cast<UINT>(nFileSize);
+	std::unique_ptr<char[]> Buffer(new char[nSize + 1]);
+	if (!Buffer)
+	{
+		LOGERR("Not enough memory to read config file '%s'", pPath);
+		f_close(&File);
+		return false;
+	}
+
 	UINT nRead;
 
-	if (f_read(&File, Buffer, nSize, &nRead) != FR_OK)
+	if (f_read(&File, Buffer.get(), nSize, &nRead) != FR_OK || nRead != nSize)
 	{
-		LOGERR("Error reading config file", pPath);
+		LOGERR("Error reading config file '%s'", pPath);
 		f_close(&File);
 		return false;
 	}
 
 	// Ensure null-terminated
 	Buffer[nRead] = '\0';
+	f_close(&File);
 
-	const int nResult = ini_parse_string(Buffer, INIHandler, this);
+	const int nResult = ini_parse_string(Buffer.get(), INIHandler, this);
 	if (nResult > 0)
 		LOGWARN("Config parse error on line %d", nResult);
 
-	f_close(&File);
-	return nResult >= 0;
-
+	return nResult == 0 && Validate();
 }
 
 int CConfig::INIHandler(void* pUser, const char* pSection, const char* pName, const char* pValue)
@@ -162,13 +181,26 @@ bool CConfig::ParseOption(const char* pString, bool* pOutBool)
 
 bool CConfig::ParseOption(const char* pString, int* pOutInt, bool bHex)
 {
-	*pOutInt = strtol(pString, nullptr, bHex ? 16 : 10);
+	errno = 0;
+	char* pEnd;
+	const long nValue = strtol(pString, &pEnd, bHex ? 16 : 10);
+	if (pEnd == pString || *pEnd != '\0' || errno == ERANGE ||
+	    nValue < std::numeric_limits<int>::min() || nValue > std::numeric_limits<int>::max())
+		return false;
+
+	*pOutInt = static_cast<int>(nValue);
 	return true;
 }
 
 bool CConfig::ParseOption(const char* pString, float* pOutFloat)
 {
-	*pOutFloat = strtof(pString, nullptr);
+	errno = 0;
+	char* pEnd;
+	const float nValue = strtof(pString, &pEnd);
+	if (pEnd == pString || *pEnd != '\0' || errno == ERANGE || !std::isfinite(nValue))
+		return false;
+
+	*pOutFloat = nValue;
 	return true;
 }
 
@@ -208,6 +240,57 @@ bool CConfig::ParseOption(const char* pString, CIPAddress* pOut)
 		return false;
 
 	pOut->Set(IPAddress);
+	return true;
+}
+
+bool CConfig::Validate() const
+{
+	#define VALIDATE_RANGE(NAME, MINIMUM, MAXIMUM) \
+		if (NAME < (MINIMUM) || NAME > (MAXIMUM)) \
+		{ \
+			LOGERR("Config value '%s' is out of range [%d, %d]", #NAME, MINIMUM, MAXIMUM); \
+			return false; \
+		}
+
+	VALIDATE_RANGE(SystemI2CBaudRate, 100000, 1000000);
+	VALIDATE_RANGE(SystemPowerSaveTimeout, 0, 3600);
+	VALIDATE_RANGE(MIDIGPIOBaudRate, 300, 4000000);
+	VALIDATE_RANGE(MIDIUSBSerialBaudRate, 9600, 115200);
+	VALIDATE_RANGE(AudioSampleRate, 32000, 192000);
+	VALIDATE_RANGE(AudioChunkSize, 2, 2048);
+	VALIDATE_RANGE(ControlSwitchTimeout, 0, 3600);
+	VALIDATE_RANGE(FluidSynthSoundFont, 0, 255);
+	VALIDATE_RANGE(FluidSynthPolyphony, 1, 65535);
+	VALIDATE_RANGE(LCDI2CLCDAddress, 0, 0x7F);
+
+	#undef VALIDATE_RANGE
+
+	if ((LCDType == TLCDType::HD44780FourBit || LCDType == TLCDType::HD44780I2C) &&
+	    !((LCDWidth == 16 || LCDWidth == 20) && (LCDHeight == 2 || LCDHeight == 4)))
+	{
+		LOGERR("Character LCD dimensions must be 16x2, 16x4, 20x2, or 20x4");
+		return false;
+	}
+
+	if ((LCDType == TLCDType::SH1106I2C || LCDType == TLCDType::SSD1306I2C) &&
+	    !((LCDWidth == 128 || LCDWidth == 132) && (LCDHeight == 32 || LCDHeight == 64)))
+	{
+		LOGERR("Graphical LCD dimensions must be 128x32, 128x64, 132x32, or 132x64");
+		return false;
+	}
+
+	if (AudioOutputDevice == TAudioOutputDevice::I2S && AudioChunkSize < 32)
+	{
+		LOGERR("I2S audio requires chunk_size >= 32");
+		return false;
+	}
+
+	if (AudioOutputDevice == TAudioOutputDevice::HDMI && AudioChunkSize < 384)
+	{
+		LOGERR("HDMI audio requires chunk_size >= 384");
+		return false;
+	}
+
 	return true;
 }
 

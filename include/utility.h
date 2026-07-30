@@ -105,7 +105,7 @@ namespace Utility
 		for (size_t i = 0; i < nSize; ++i)
 			nSum = (nSum + pData[i]) & 0x7F;
 
-		return 128 - nSum;
+		return (128 - nSum) & 0x7F;
 	}
 
 	// Comparators for sorting

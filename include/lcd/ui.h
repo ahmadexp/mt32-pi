@@ -81,6 +81,8 @@ private:
 	static constexpr size_t SystemMessageTextBufferSize = 256;
 	static constexpr size_t SyxExTextBufferSize = 32 + 1;
 	static constexpr size_t SysExPixelBufferSize = 64;
+	static constexpr size_t MaxCharacterLCDWidth = 20;
+	static constexpr size_t MaxCharacterLCDHeight = 4;
 
 	static constexpr unsigned SystemMessageDisplayTimeMillis = 3000;
 	static constexpr unsigned SystemMessageSpinnerTimeMillis = 32;

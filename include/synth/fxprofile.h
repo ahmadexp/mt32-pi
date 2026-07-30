@@ -23,23 +23,23 @@
 #ifndef _fxprofile_h
 #define _fxprofile_h
 
-#include "optional.h"
+#include <optional>
 
 struct TFXProfile
 {
-	TOptional<float> nGain;
+	std::optional<float> nGain;
 
-	TOptional<bool> bReverbActive;
-	TOptional<float> nReverbDamping;
-	TOptional<float> nReverbLevel;
-	TOptional<float> nReverbRoomSize;
-	TOptional<float> nReverbWidth;
+	std::optional<bool> bReverbActive;
+	std::optional<float> nReverbDamping;
+	std::optional<float> nReverbLevel;
+	std::optional<float> nReverbRoomSize;
+	std::optional<float> nReverbWidth;
 
-	TOptional<bool> bChorusActive;
-	TOptional<float> nChorusDepth;
-	TOptional<float> nChorusLevel;
-	TOptional<int> nChorusVoices;
-	TOptional<float> nChorusSpeed;
+	std::optional<bool> bChorusActive;
+	std::optional<float> nChorusDepth;
+	std::optional<float> nChorusLevel;
+	std::optional<int> nChorusVoices;
+	std::optional<float> nChorusSpeed;
 };
 
 #endif

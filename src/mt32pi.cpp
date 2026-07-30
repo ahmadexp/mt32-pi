@@ -46,7 +46,19 @@ constexpr u32 MisterUpdatePeriodMillis             = 50;
 constexpr u32 LEDTimeoutMillis                     = 50;
 constexpr u32 ActiveSenseTimeoutMillis             = 330;
 
-constexpr float Sample24BitMax = (1 << 23) - 1;
+constexpr s32 Sample24BitMin = -(1 << 23);
+constexpr s32 Sample24BitMax = (1 << 23) - 1;
+constexpr float Sample24BitScale = 1 << 23;
+
+static inline s32 FloatToSigned24(float nSample)
+{
+	if (nSample >= 1.0f)
+		return Sample24BitMax;
+	if (nSample <= -1.0f)
+		return Sample24BitMin;
+
+	return static_cast<s32>(nSample * Sample24BitScale);
+}
 
 enum class TCustomSysExCommand : u8
 {
@@ -218,7 +230,7 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 
 	// Queue size of just one chunk
 	unsigned int nQueueSize = m_pConfig->AudioChunkSize;
-	TSoundFormat Format = TSoundFormat::SoundFormatSigned24;
+	const TSoundFormat Format = TSoundFormat::SoundFormatSigned24_32;
 
 	switch (m_pConfig->AudioOutputDevice)
 	{
@@ -250,8 +262,6 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 			CI2CMaster* const pI2CMaster = bSlave ? nullptr : m_pI2CMaster;
 
 			m_pSound = new CI2SSoundBaseDevice(m_pInterrupt, m_pConfig->AudioSampleRate, m_pConfig->AudioChunkSize, bSlave, pI2CMaster);
-			Format = TSoundFormat::SoundFormatSigned24_32;
-
 			break;
 		}
 	}
@@ -259,6 +269,16 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 	m_pSound->SetWriteFormat(Format);
 	if (!m_pSound->AllocateQueueFrames(nQueueSize))
 		LOGPANIC("Failed to allocate sound queue");
+
+	const size_t nAudioSamples = m_pSound->GetQueueSizeFrames() * 2;
+	m_pAudioFloatBuffer.reset(new float[nAudioSamples]);
+	m_pAudioIntBuffer.reset(new s32[nAudioSamples]);
+	if (!m_pAudioFloatBuffer || !m_pAudioIntBuffer)
+		LOGPANIC("Failed to allocate audio buffers");
+
+	// Wake the audio core only when the hardware queue needs a meaningful
+	// refill. This avoids continuously polling and rendering tiny batches.
+	m_pSound->RegisterNeedDataCallback(AudioNeedDataHandler, nullptr);
 
 	LCDLog(TLCDLogType::Startup, "Init controls");
 	if (m_pConfig->ControlScheme == CConfig::TControlScheme::SimpleButtons)
@@ -447,7 +467,7 @@ void CMT32Pi::MainTask()
 		}
 
 		// Check for active sensing timeout
-		if (m_bActiveSenseFlag && (nTicks > m_nActiveSenseTime) && (nTicks - m_nActiveSenseTime) >= MSEC2HZ(ActiveSenseTimeoutMillis))
+		if (m_bActiveSenseFlag && (nTicks - m_nActiveSenseTime) >= MSEC2HZ(ActiveSenseTimeoutMillis))
 		{
 			m_pCurrentSynth->AllSoundOff();
 			m_bActiveSenseFlag = false;
@@ -499,7 +519,7 @@ void CMT32Pi::MainTask()
 
 	// Wait for UI task to finish
 	while (!m_bUITaskDone)
-		;
+		WaitForEvent();
 }
 
 void CMT32Pi::UITask()
@@ -512,6 +532,8 @@ void CMT32Pi::UITask()
 	if (!(m_pLCD || bMisterEnabled))
 	{
 		m_bUITaskDone = true;
+		DataMemBarrier();
+		SendEvent();
 		return;
 	}
 
@@ -566,25 +588,22 @@ void CMT32Pi::UITask()
 		m_pLCD->Clear();
 
 	m_bUITaskDone = true;
+	DataMemBarrier();
+	SendEvent();
 }
 
 void CMT32Pi::AudioTask()
 {
 	LOGNOTE("Audio task on Core 2 starting up");
 
-	constexpr u8 nChannels = 2;
-
-	// Circle's "fast path" for I2S 24-bit really expects 32-bit samples
-	const bool bI2S = m_pConfig->AudioOutputDevice == CConfig::TAudioOutputDevice::I2S;
+	constexpr size_t nChannels = 2;
+	constexpr size_t nBytesPerFrame = nChannels * sizeof(s32);
 	const bool bReversedStereo = m_pConfig->AudioReversedStereo;
-	const u8 nBytesPerSample = bI2S ? sizeof(s32) : (sizeof(s8) * 3);
-	const u8 nBytesPerFrame = 2 * nBytesPerSample;
-
 	const size_t nQueueSizeFrames = m_pSound->GetQueueSizeFrames();
-
-	// Extra byte so that we can write to the 24-bit buffer with overlapping 32-bit writes (efficiency)
-	float FloatBuffer[nQueueSizeFrames * nChannels];
-	s8 IntBuffer[nQueueSizeFrames * nBytesPerFrame + (bI2S ? 0 : 1)];
+	const size_t nLeftChannel = bReversedStereo ? 1 : 0;
+	const size_t nRightChannel = bReversedStereo ? 0 : 1;
+	float* const pFloatBuffer = m_pAudioFloatBuffer.get();
+	s32* const pIntBuffer = m_pAudioIntBuffer.get();
 
 	while (m_bRunning)
 	{
@@ -595,32 +614,26 @@ void CMT32Pi::AudioTask()
 		}
 
 		const size_t nFrames = nQueueSizeFrames - m_pSound->GetQueueFramesAvail();
+		if (nFrames == 0)
+		{
+			WaitForEvent();
+			continue;
+		}
+
 		const size_t nWriteBytes = nFrames * nBytesPerFrame;
 
-		m_pCurrentSynth->Render(FloatBuffer, nFrames);
+		m_pCurrentSynth->Render(pFloatBuffer, nFrames);
 
-		if (bReversedStereo)
+		// Circle converts aligned signed 24-in-32 samples for PWM/HDMI and
+		// sends the same representation through its direct I2S fast path.
+		for (size_t nFrame = 0; nFrame < nFrames; ++nFrame)
 		{
-			// Convert to signed 24-bit integers with channel swap
-			for (size_t i = 0; i < nFrames * nChannels; i += nChannels)
-			{
-				s32* const pLeftSample = reinterpret_cast<s32*>(IntBuffer + i * nBytesPerSample);
-				s32* const pRightSample = reinterpret_cast<s32*>(IntBuffer + (i + 1) * nBytesPerSample);
-				*pLeftSample = FloatBuffer[i + 1] * Sample24BitMax;
-				*pRightSample = FloatBuffer[i] * Sample24BitMax;
-			}
-		}
-		else
-		{
-			// Convert to signed 24-bit integers
-			for (size_t i = 0; i < nFrames * nChannels; ++i)
-			{
-				s32* const pSample = reinterpret_cast<s32*>(IntBuffer + i * nBytesPerSample);
-				*pSample = FloatBuffer[i] * Sample24BitMax;
-			}
+			const size_t nSample = nFrame * nChannels;
+			pIntBuffer[nSample] = FloatToSigned24(pFloatBuffer[nSample + nLeftChannel]);
+			pIntBuffer[nSample + 1] = FloatToSigned24(pFloatBuffer[nSample + nRightChannel]);
 		}
 
-		const int nResult = m_pSound->Write(IntBuffer, nWriteBytes);
+		const int nResult = m_pSound->Write(pIntBuffer, nWriteBytes);
 		if (nResult != static_cast<int>(nWriteBytes))
 			LOGERR("Sound data dropped");
 	}
@@ -1072,7 +1085,7 @@ size_t CMT32Pi::ReceiveSerialMIDI(u8* pOutData, size_t nSize)
 void CMT32Pi::ProcessEventQueue()
 {
 	TEvent Buffer[EventQueueSize];
-	const size_t nEvents = m_EventQueue.Dequeue(Buffer, sizeof(Buffer));
+	const size_t nEvents = m_EventQueue.Dequeue(Buffer, Utility::ArraySize(Buffer));
 
 	// We got some events, wake up
 	if (nEvents > 0)
@@ -1353,6 +1366,11 @@ void CMT32Pi::IRQMIDIReceiveHandler(const u8* pData, size_t nSize)
 	}
 }
 
+void CMT32Pi::AudioNeedDataHandler(void* pContext)
+{
+	SendEvent();
+}
+
 void CMT32Pi::PanicHandler()
 {
 	if (!s_pThis || !s_pThis->m_pLCD)
@@ -1361,7 +1379,7 @@ void CMT32Pi::PanicHandler()
 	// Stop the other tasks
 	s_pThis->StopTasks();
 	while (!s_pThis->m_bUITaskDone)
-		;
+		WaitForEvent();
 
 	const char* pGuru = "Guru Meditation:";
 	u8 nOffsetX = CUserInterface::CenterMessageOffset(*s_pThis->m_pLCD, pGuru);
@@ -1370,6 +1388,7 @@ void CMT32Pi::PanicHandler()
 
 	char Buffer[LOGGER_BUFSIZE];
 	CLogger::Get()->Read(Buffer, sizeof(Buffer), false);
+	Buffer[sizeof(Buffer) - 1] = '\0';
 
 	// Find last newline
 	char* pMessageStart = strrchr(Buffer, '\n');
@@ -1383,9 +1402,14 @@ void CMT32Pi::PanicHandler()
 		return;
 
 	// Skip past timestamp and log source, kill color control characters
-	pMessageStart = strstr(pMessageStart, ": ") + 2;
+	pMessageStart = strstr(pMessageStart, ": ");
+	if (!pMessageStart)
+		return;
+	pMessageStart += 2;
+
 	char* pMessageEnd = strstr(pMessageStart, "\x1B[0m");
-	*pMessageEnd = '\0';
+	if (pMessageEnd)
+		*pMessageEnd = '\0';
 
 	const size_t nMessageLength = strlen(pMessageStart);
 	size_t nCurrentScrollOffset = 0;

@@ -113,6 +113,11 @@ bool ValidateVolumeName(const char* pVolumeName)
 	return false;
 }
 
+bool IsValidFormattedLength(int nLength, size_t nBufferSize)
+{
+	return nLength >= 0 && static_cast<size_t>(nLength) < nBufferSize;
+}
+
 // Comparator for sorting directory listings
 inline bool DirectoryCaseInsensitiveAscending(const TDirectoryListEntry& EntryA, const TDirectoryListEntry& EntryB)
 {
@@ -293,6 +298,12 @@ bool CFTPWorker::SendStatus(TFTPStatus StatusCode, const char* pMessage)
 	assert(m_pControlSocket != nullptr);
 
 	const int nLength = snprintf(m_CommandBuffer, sizeof(m_CommandBuffer), "%d %s\r\n", StatusCode, pMessage);
+	if (!IsValidFormattedLength(nLength, sizeof(m_CommandBuffer)))
+	{
+		LOGERR("FTP status response is too long");
+		return false;
+	}
+
 	if (m_pControlSocket->Send(m_CommandBuffer, nLength, 0) < 0)
 	{
 		LOGERR("Failed to send status");
@@ -411,7 +422,7 @@ const TDirectoryListEntry* CFTPWorker::BuildDirectoryList(size_t& nOutEntries) c
 			while (Result == FR_OK && *FileInfo.fname)
 			{
 				TDirectoryListEntry& Entry = pEntries[nCurrentEntry++];
-				strncpy(Entry.Name, FileInfo.fname, sizeof(Entry.Name));
+				snprintf(Entry.Name, sizeof(Entry.Name), "%s", FileInfo.fname);
 
 				if (FileInfo.fattrib & AM_DIR)
 				{
@@ -954,7 +965,7 @@ bool CFTPWorker::List(const char* pArgs)
 			else
 				nLength = snprintf(Buffer, sizeof(Buffer), "%-9s %-13s %14d %s\r\n", Date, Time, Entry.nSize, Entry.Name);
 
-			if (pDataSocket->Send(Buffer, nLength, 0) < 0)
+			if (!IsValidFormattedLength(nLength, sizeof(Buffer)) || pDataSocket->Send(Buffer, nLength, 0) < 0)
 			{
 				delete[] pDirEntries;
 				delete pDataSocket;
@@ -996,7 +1007,7 @@ bool CFTPWorker::ListFileNames(const char* pArgs)
 				continue;
 
 			const int nLength = snprintf(Buffer, sizeof(Buffer), "%s\r\n", Entry.Name);
-			if (pDataSocket->Send(Buffer, nLength, 0) < 0)
+			if (!IsValidFormattedLength(nLength, sizeof(Buffer)) || pDataSocket->Send(Buffer, nLength, 0) < 0)
 			{
 				delete[] pDirEntries;
 				delete pDataSocket;

@@ -17,6 +17,9 @@ GC_SECTIONS?=1
 # Compress the kernel
 GZIP_KERNEL?=1
 
+# Application language standard
+STANDARD?=-std=c++20
+
 # Toolchain setup
 ifeq ($(BOARD), pi2)
 RASPBERRYPI=2

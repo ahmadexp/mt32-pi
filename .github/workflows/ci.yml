@@ -2,6 +2,13 @@ name: mt32-pi CI
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 env:
   toolchain-version: 15.2.rel1
   python-version: 3.11
@@ -10,28 +17,23 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v4.5.0
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.python-version }}
 
-      - uses: psf/black@stable
-        with:
-          options: --check --diff --preview
-          src: scripts
+      - name: Install Python linters
+        run: python -m pip install black==26.3.1 isort==8.0.1 flake8==7.3.0
 
-      - uses: isort/isort-action@master
-        with:
-            sortPaths: scripts
+      - name: Lint Python scripts
+        run: |
+          python -m black --check --diff --preview scripts
+          python -m isort --check-only --diff scripts
+          python -m flake8 scripts
 
-      - uses: py-actions/flake8@v2
-        with:
-          path: scripts
-
-      - uses: ludeeus/action-shellcheck@master
-        with:
-          scandir: scripts
+      - name: Lint shell scripts
+        run: shellcheck scripts/*.sh
 
   build:
     runs-on: ubuntu-latest
@@ -41,19 +43,29 @@ jobs:
       matrix:
         board: [pi2, pi3-64, pi4-64]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
 
     - name: Fetch submodules
       run: make submodules
 
-    - name: Setup ccache
-      uses: hendrikmuhs/ccache-action@v1.2
+    - name: Cache compiler outputs
+      uses: actions/cache@v6
       with:
-        key: ${{ env.toolchain-version }}-${{ matrix.board }}
+        path: ~/.cache/ccache
+        key: ccache-${{ env.toolchain-version }}-${{ matrix.board }}-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ env.toolchain-version }}-${{ matrix.board }}-
+
+    - name: Install ccache
+      run: |
+        if ! command -v ccache >/dev/null; then
+          sudo apt-get update
+          sudo apt-get install --yes ccache
+        fi
 
     - name: Cache ARM toolchains
       id: cache-toolchains
-      uses: actions/cache@v3
+      uses: actions/cache@v6
       with:
         path: |
           ~/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-arm-none-eabi
@@ -71,47 +83,54 @@ jobs:
 
     - name: Update PATH
       run: |
-        mkdir ~/ccache_bin
+        mkdir -p "$HOME/ccache_bin"
+        ccache_path="$(command -v ccache)"
         for triplet in arm-none-eabi aarch64-none-elf; do
-          ln -s $(which ccache) ~/ccache_bin/${triplet}-gcc
-          ln -s $(which ccache) ~/ccache_bin/${triplet}-g++
-          echo "$HOME/ccache_bin:$HOME/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-${triplet}/bin" >> $GITHUB_PATH
+          ln -s "$ccache_path" "$HOME/ccache_bin/${triplet}-gcc"
+          ln -s "$ccache_path" "$HOME/ccache_bin/${triplet}-g++"
+          echo "$HOME/ccache_bin:$HOME/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-${triplet}/bin" >> "$GITHUB_PATH"
         done
 
     - name: Build
       run: make -j BOARD=${{ matrix.board }}
 
     - name: Upload built kernel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
-        name: kernels
+        name: standard-kernel-${{ matrix.board }}
         path: kernel*.img
+        if-no-files-found: error
+        compression-level: 0
 
     - name: Build (HDMI console)
-      run: make clean && make -j BOARD=${{ matrix.board }} HDMI_CONSOLE=1
+      run: make clean BOARD=${{ matrix.board }} && make -j BOARD=${{ matrix.board }} HDMI_CONSOLE=1
 
     - name: Upload built kernel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
-        name: kernels-hdmi
+        name: hdmi-kernel-${{ matrix.board }}
         path: kernel*.img
+        if-no-files-found: error
+        compression-level: 0
 
   package:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       boot-home: external/circle-stdlib/libs/circle/boot
       wlan-home: external/circle-stdlib/libs/circle/addon/wlan
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
 
     - name: Fetch submodules
       run: make submodules
 
     - name: Cache boot files
       id: cache-boot-files
-      uses: actions/cache@v3
+      uses: actions/cache@v6
       with:
         path: |
           sdcard/armstub8-rpi4.bin
@@ -125,18 +144,18 @@ jobs:
           sdcard/LICENCE.broadcom
           sdcard/start_cd.elf
           sdcard/start4cd.elf
-        key: cache-boot-files-${{ hashFiles(join(env.boot-home, '/Makefile')) }}
+        key: cache-boot-files-${{ hashFiles('external/circle-stdlib/libs/circle/boot/Makefile') }}
 
     - name: Cache WLAN firmware
       id: cache-wlan-firmware
-      uses: actions/cache@v3
+      uses: actions/cache@v6
       with:
         path: sdcard/firmware
-        key: cache-wlan-firmware-${{ hashFiles(join(env.wlan-home, '/firmware/Makefile')) }}
+        key: cache-wlan-firmware-${{ hashFiles('external/circle-stdlib/libs/circle/addon/wlan/firmware/Makefile') }}
 
     - name: Cache ARM toolchains
       if: steps.cache-boot-files.outputs.cache-hit != 'true'
-      uses: actions/cache@v3
+      uses: actions/cache@v6
       with:
         path: |
           ~/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-arm-none-eabi
@@ -147,7 +166,7 @@ jobs:
       if: steps.cache-boot-files.outputs.cache-hit != 'true'
       run: |
         for triplet in arm-none-eabi aarch64-none-elf; do
-          echo "$HOME/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-${triplet}/bin" >> $GITHUB_PATH
+          echo "$HOME/arm-gnu-toolchain-${{ env.toolchain-version }}-x86_64-${triplet}/bin" >> "$GITHUB_PATH"
         done
 
     - name: Download boot files and build ARM stub if not retrieved from cache
@@ -188,7 +207,7 @@ jobs:
 
     - name: Cache GeneralUser GS SoundFont
       id: cache-generaluser-gs
-      uses: actions/cache@v3
+      uses: actions/cache@v6
       with:
         path: GeneralUser GS v1.511
         key: cache-generaluser-gs-1.511
@@ -201,10 +220,11 @@ jobs:
         unzip "GeneralUser GS v1.511.zip"
 
     - name: Retrieve built kernels
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v8
       with:
-        name: kernels
+        pattern: standard-kernel-*
         path: sdcard
+        merge-multiple: true
 
     - name: Add extra files to SD card directory
       run: |
@@ -216,19 +236,22 @@ jobs:
         cp README.md sdcard/docs
 
     - name: Upload SD card archive
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: sdcard
         path: sdcard
+        if-no-files-found: error
 
     - name: Get version (git tag)
       if: startsWith(github.ref, 'refs/tags/')
       id: get_version
-      run: echo ::set-output name=version::${GITHUB_REF#refs/tags/v}
+      run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
     - name: Create release package
       if: startsWith(github.ref, 'refs/tags/')
-      run: cd sdcard; zip -r ../mt32-pi-${{ steps.get_version.outputs.version }}.zip *
+      run: |
+        cd sdcard
+        zip -r "../mt32-pi-${{ steps.get_version.outputs.version }}.zip" ./*
 
     - name: Release
       uses: docker://antonyurchenko/git-release:latest

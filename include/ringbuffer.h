@@ -56,11 +56,8 @@ public:
 		size_t nEnqueued = 0;
 		m_Lock.Acquire();
 
-		for (size_t i = 0; i < nCount; ++i)
-		{
-			if (EnqueueOne(pItems[i]))
-				++nEnqueued;
-		}
+		while (nEnqueued < nCount && EnqueueOne(pItems[nEnqueued]))
+			++nEnqueued;
 
 		m_Lock.Release();
 		return nEnqueued;
@@ -73,8 +70,8 @@ public:
 
 		if (m_nInPtr != m_nOutPtr)
 		{
-			OutItem = m_Data[m_nOutPtr++];
-			m_nOutPtr &= BufferMask;
+			OutItem = m_Data[m_nOutPtr];
+			m_nOutPtr = (m_nOutPtr + 1) & BufferMask;
 			bSuccess = true;
 		}
 
@@ -89,8 +86,8 @@ public:
 
 		while (m_nInPtr != m_nOutPtr && nDequeued < nMaxCount)
 		{
-			pOutBuffer[nDequeued++] = m_Data[m_nOutPtr++];
-			m_nOutPtr &= BufferMask;
+			pOutBuffer[nDequeued++] = m_Data[m_nOutPtr];
+			m_nOutPtr = (m_nOutPtr + 1) & BufferMask;
 		}
 
 		m_Lock.Release();
@@ -104,8 +101,8 @@ private:
 	{
 		if (((m_nInPtr + 1) & BufferMask) != m_nOutPtr)
 		{
-			m_Data[m_nInPtr++] = Item;
-			m_nInPtr &= BufferMask;
+			m_Data[m_nInPtr] = Item;
+			m_nInPtr = (m_nInPtr + 1) & BufferMask;
 			return true;
 		}
 
@@ -115,8 +112,8 @@ private:
 	static constexpr size_t BufferMask = N - 1;
 
 	CSpinLock m_Lock;
-	volatile size_t m_nInPtr;
-	volatile size_t m_nOutPtr;
+	size_t m_nInPtr;
+	size_t m_nOutPtr;
 	T m_Data[N];
 };
 

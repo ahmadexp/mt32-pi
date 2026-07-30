@@ -14,6 +14,22 @@ index 8699d53c..071856a8 100644
  endif ( WIN32 )
  
  # IBM OS/2
+@@ -477,6 +479,7 @@ endif(ASTYLE)
+ 
+ find_package ( PkgConfig REQUIRED )
+ 
++if ( FALSE )
+ # Mandatory libraries: glib and gthread
+ pkg_check_modules ( GLIB REQUIRED glib-2.0>=2.6.5 gthread-2.0>=2.6.5 IMPORTED_TARGET )
+ list( APPEND PC_REQUIRES_PRIV "glib-2.0" "gthread-2.0")
+@@ -485,6 +488,7 @@ if ( GLIB_glib-2.0_VERSION AND GLIB_glib-2.0_VERSION VERSION_LESS "2.26.0" )
+     message ( WARNING "Your version of glib is very old. This may cause problems with fluidsynth's sample cache on Windows. Consider updating to glib 2.26 or newer!" )
+ endif ( GLIB_glib-2.0_VERSION AND GLIB_glib-2.0_VERSION VERSION_LESS "2.26.0" )
+ 
++endif ( FALSE )
+ include ( PkgConfigHelpers ) # has unset_pkg_config()
+ 
+ # Optional features
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
 index e86a6429..c8ea31a2 100644
 --- a/src/CMakeLists.txt
