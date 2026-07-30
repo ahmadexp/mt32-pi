@@ -23,13 +23,14 @@
 #ifndef _control_h
 #define _control_h
 
+#include <optional>
+
 #include <circle/gpiopin.h>
 #include <circle/types.h>
 #include <circle/usertimer.h>
 
 #include "control/rotaryencoder.h"
 #include "event.h"
-#include "optional.h"
 #include "utility.h"
 
 class CControl
@@ -69,7 +70,7 @@ protected:
 	u8 m_nLastButtonState;
 
 	// Repeat
-	TOptional<u8> m_RepeatButton;
+	std::optional<u8> m_RepeatButton;
 	u32 m_PressedTime;
 	u32 m_RepeatTime;
 

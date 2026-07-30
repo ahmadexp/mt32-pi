@@ -105,6 +105,7 @@ public:
 
 private:
 	static int INIHandler(void* pUser, const char* pSection, const char* pName, const char* pValue);
+	bool Validate() const;
 
 	static CConfig* s_pThis;
 };

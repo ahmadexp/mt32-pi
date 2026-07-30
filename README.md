@@ -1,4 +1,3 @@
-This is a fork of mt32-pi with a lot of improvements and many more to come.
 mt32-pi is a bare-metal MIDI synthesizer for Raspberry Pi. It runs without a general-purpose operating system and combines [Munt] MT-32 emulation with [FluidSynth] SoundFont synthesis on the [Circle] framework.
 
 The firmware provides low-latency MIDI synthesis for vintage computers, [MiSTer FPGA], and standalone MIDI controllers. It supports MT-32/CM-32L ROM sets, [General MIDI], [Roland GS], [Yamaha XG], and user-supplied [SoundFonts][SoundFont].
@@ -21,6 +20,7 @@ The firmware provides low-latency MIDI synthesis for vintage computers, [MiSTer 
 - [MiSTer FPGA integration via user port][MiSTer FPGA].
 - Network MIDI support via [RTP-MIDI] and [raw UDP socket].
 - [Embedded FTP server][FTP server] for remote access to files.
+- Event-driven audio queue refills avoid busy polling on the audio core.
 - Automatic CPU power management during idle periods.
 
 ## Installation
@@ -63,7 +63,7 @@ Incoming MIDI, control-panel input, USB changes, and other registered activity r
 
 ## Building from source
 
-The supported compiler release is [Arm GNU Toolchain] 15.2.Rel1, which provides GCC 15.2.1. CI downloads this release automatically and tests Raspberry Pi 2, Raspberry Pi 3 64-bit, and Raspberry Pi 4 64-bit builds with both the normal and HDMI consoles.
+The supported compiler release is [Arm GNU Toolchain] 15.2.Rel1, which provides GCC 15.2.1. Application sources use C++20. CI downloads this release automatically and tests Raspberry Pi 2, Raspberry Pi 3 64-bit, and Raspberry Pi 4 64-bit builds with both the normal and HDMI consoles.
 
 ### Prerequisites
 

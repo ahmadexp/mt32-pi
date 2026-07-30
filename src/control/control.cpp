@@ -72,8 +72,8 @@ void CControl::Update()
 					m_PressedTime = CTimer::GetClockTicks();
 					m_RepeatTime = 0;
 				}
-				else if (m_RepeatButton && m_RepeatButton.Value() == i)
-					m_RepeatButton.Reset();
+				else if (m_RepeatButton && *m_RepeatButton == i)
+					m_RepeatButton.reset();
 
 				Event.Button.Button   = static_cast<TButton>(i);
 				Event.Button.bPressed = bCurrentState;
@@ -97,7 +97,7 @@ void CControl::Update()
 				m_RepeatTime = nTicks;
 			else if (nTicks - m_RepeatTime > RepeatPeriod(nPressedDuration - RepeatDelayMicros))
 			{
-				Event.Button.Button   = static_cast<TButton>(m_RepeatButton.Value());
+				Event.Button.Button   = static_cast<TButton>(*m_RepeatButton);
 				Event.Button.bPressed = true;
 				Event.Button.bRepeat = true;
 				m_pEventQueue->Enqueue(Event);

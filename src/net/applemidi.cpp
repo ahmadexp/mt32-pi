@@ -28,8 +28,11 @@
 #include <circle/timer.h>
 #include <circle/util.h>
 
+#include <cstdio>
+
 #include "net/applemidi.h"
 #include "net/byteorder.h"
+#include "utility.h"
 
 // #define APPLEMIDI_DEBUG
 
@@ -146,9 +149,18 @@ bool ParseInvitationPacket(const u8* pBuffer, size_t nSize, TAppleMIDISession* p
 	pOutPacket->nSSRC = ntohl(pInPacket->nSSRC);
 
 	if (nSize > NamelessSessionPacketSize)
-		strncpy(pOutPacket->Name, pInPacket->Name, sizeof(pOutPacket->Name));
+	{
+		const size_t nAvailable = nSize - NamelessSessionPacketSize;
+		const size_t nMaxLength = Utility::Min(nAvailable, sizeof(pOutPacket->Name) - 1);
+		size_t nNameLength = 0;
+		while (nNameLength < nMaxLength && pInPacket->Name[nNameLength] != '\0')
+			++nNameLength;
+
+		memcpy(pOutPacket->Name, pInPacket->Name, nNameLength);
+		pOutPacket->Name[nNameLength] = '\0';
+	}
 	else
-		strncpy(pOutPacket->Name, "<unknown>", sizeof(pOutPacket->Name));
+		snprintf(pOutPacket->Name, sizeof(pOutPacket->Name), "%s", "<unknown>");
 
 	return true;
 }

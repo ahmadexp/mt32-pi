@@ -87,7 +87,7 @@ namespace
 	{
 	public:
 		// Result type of conversion function determines array type
-		using Column = typename std::result_of<F& (const CharData&, u8)>::type;
+		using Column = std::invoke_result_t<F&, const CharData&, u8>;
 		using ColumnData = Column[6];
 
 		constexpr Font(const CharData(&CharData)[N], F Function) : mCharData{ 0 }

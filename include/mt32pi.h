@@ -23,6 +23,8 @@
 #ifndef _mt32pi_h
 #define _mt32pi_h
 
+#include <memory>
+
 #include <circle/actled.h>
 #include <circle/bcm54213.h>
 #include <circle/bcmrandom.h>
@@ -209,6 +211,8 @@ private:
 
 	// Audio output
 	CSoundBaseDevice* m_pSound;
+	std::unique_ptr<float[]> m_pAudioFloatBuffer;
+	std::unique_ptr<s32[]> m_pAudioIntBuffer;
 
 	// Extra devices
 	CPisound* m_pPisound;
@@ -229,6 +233,7 @@ private:
 	static void USBMIDIDeviceRemovedHandler(CDevice* pDevice, void* pContext);
 	static void USBMIDIPacketHandler(unsigned nCable, u8* pPacket, unsigned nLength);
 	static void IRQMIDIReceiveHandler(const u8* pData, size_t nSize);
+	static void AudioNeedDataHandler(void* pContext);
 
 	static void PanicHandler();
 

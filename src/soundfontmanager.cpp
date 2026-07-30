@@ -24,6 +24,8 @@
 #include <circle/util.h>
 #include <fatfs/ff.h>
 
+#include <memory>
+
 #include <ini.h>
 
 #include "config.h"
@@ -33,6 +35,7 @@
 LOGMODULE("soundfontmanager");
 const char* const Disks[] = { "SD", "USB" };
 const char SoundFontDirectory[] = "soundfonts";
+constexpr size_t MaxFXProfileFileSize = 64 * 1024;
 
 // Four-character codes used throughout SoundFont RIFF structure
 constexpr u32 FourCC(const char pFourCC[4])
@@ -138,26 +141,44 @@ TFXProfile CSoundFontManager::GetSoundFontFXProfile(size_t nIndex) const
 
 	// +5 bytes in case we need to add an extension (4 chars + null terminator)
 	const size_t nPathLength = strlen(pSoundFontPath) + 5;
-	char PathBuffer[nPathLength];
-	strcpy(PathBuffer, pSoundFontPath);
+	std::unique_ptr<char[]> PathBuffer(new char[nPathLength]);
+	if (!PathBuffer)
+		return FXProfile;
+
+	strcpy(PathBuffer.get(), pSoundFontPath);
 
 	// Replace file extension if present
-	char* const pExtension = strrchr(PathBuffer, '.');
+	char* const pExtension = strrchr(PathBuffer.get(), '.');
 	if (pExtension)
 		strcpy(pExtension, ".cfg");
 	else
-		strcat(PathBuffer, ".cfg");
+		strcat(PathBuffer.get(), ".cfg");
 
 	FIL File;
-	if (f_open(&File, PathBuffer, FA_READ) != FR_OK)
+	if (f_open(&File, PathBuffer.get(), FA_READ) != FR_OK)
 		return FXProfile;
 
-	// +1 byte for null terminator
-	const UINT nSize = f_size(&File);
-	char Buffer[nSize + 1];
+	const FSIZE_t nFileSize = f_size(&File);
+	if (nFileSize > MaxFXProfileFileSize)
+	{
+		LOGERR("Effects profile is too large");
+		f_close(&File);
+		return FXProfile;
+	}
+
+	// Keep user-controlled profile sizes off the core stack.
+	const UINT nSize = static_cast<UINT>(nFileSize);
+	std::unique_ptr<char[]> Buffer(new char[nSize + 1]);
+	if (!Buffer)
+	{
+		LOGERR("Not enough memory to read effects profile");
+		f_close(&File);
+		return FXProfile;
+	}
+
 	UINT nRead;
 
-	if (f_read(&File, Buffer, nSize, &nRead) != FR_OK)
+	if (f_read(&File, Buffer.get(), nSize, &nRead) != FR_OK || nRead != nSize)
 	{
 		LOGERR("Error reading effects profile");
 		f_close(&File);
@@ -166,12 +187,12 @@ TFXProfile CSoundFontManager::GetSoundFontFXProfile(size_t nIndex) const
 
 	// Ensure null-terminated
 	Buffer[nRead] = '\0';
+	f_close(&File);
 
-	const int nResult = ini_parse_string(Buffer, INIHandler, &FXProfile);
+	const int nResult = ini_parse_string(Buffer.get(), INIHandler, &FXProfile);
 	if (nResult > 0)
 		LOGWARN("Effects profile parse error on line %d", nResult);
 
-	f_close(&File);
 	return FXProfile;
 }
 
@@ -267,7 +288,7 @@ int CSoundFontManager::INIHandler(void* pUser, const char* pSection, const char*
 	#define MATCH(NAME, TYPE, STRUCT_MEMBER)                            \
 		if (!strcmp(NAME, pName))                                   \
 		{                                                           \
-			auto Temp = decltype(*pFXProfile->STRUCT_MEMBER){}; \
+		TYPE Temp{}; \
 			if (CConfig::ParseOption(pValue, &Temp))            \
 			{                                                   \
 				pFXProfile->STRUCT_MEMBER = Temp;           \
