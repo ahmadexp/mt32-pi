@@ -156,30 +156,30 @@ The source code is licensed under the [GNU General Public License v3.0][license]
 [Arm GNU Toolchain]: https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads
 [circle-stdlib]: https://github.com/smuehlst/circle-stdlib
 [Circle]: https://github.com/rsta2/circle
-[Configuration file]: https://github.com/dwhinham/mt32-pi/wiki/Configuration-file
-[Control surface]: https://github.com/dwhinham/mt32-pi/wiki/Control-surface
+[Configuration file]: https://github.com/ahmadexp/mt32-pi/wiki/Configuration-file
+[Control surface]: https://github.com/ahmadexp/mt32-pi/wiki/Control-surface
 [FluidSynth]: http://www.fluidsynth.org
-[FTP server]: https://github.com/dwhinham/mt32-pi/wiki/Embedded-FTP-server
+[FTP server]: https://github.com/ahmadexp/mt32-pi/wiki/Embedded-FTP-server
 [General MIDI]: https://en.wikipedia.org/wiki/General_MIDI
 [GeneralUser GS]: https://schristiancollins.com/generaluser
-[GPIO MIDI interface]: https://github.com/dwhinham/mt32-pi/wiki/GPIO-MIDI-interface
-[I²S Hi-Fi DACs]: https://github.com/dwhinham/mt32-pi/wiki/I%C2%B2S-DACs
+[GPIO MIDI interface]: https://github.com/ahmadexp/mt32-pi/wiki/GPIO-MIDI-interface
+[I²S Hi-Fi DACs]: https://github.com/ahmadexp/mt32-pi/wiki/I%C2%B2S-DACs
 [inih]: https://github.com/benhoyt/inih
-[LCD and OLED displays]: https://github.com/dwhinham/mt32-pi/wiki/LCD-and-OLED-displays
-[License]: https://github.com/dwhinham/mt32-pi/blob/master/LICENSE
-[MiSTer FPGA]: https://github.com/dwhinham/mt32-pi/wiki/MiSTer-FPGA
-[MiSTer setup]: https://github.com/dwhinham/mt32-pi/wiki/MiSTer-FPGA%3A-Setup-and-usage
-[MT-32 synthesis]: https://github.com/dwhinham/mt32-pi/wiki/MT-32-synthesis
-[mt32-pi wiki]: https://github.com/dwhinham/mt32-pi/wiki
+[LCD and OLED displays]: https://github.com/ahmadexp/mt32-pi/wiki/LCD-and-OLED-displays
+[License]: https://github.com/ahmadexp/mt32-pi/blob/master/LICENSE
+[MiSTer FPGA]: https://github.com/ahmadexp/mt32-pi/wiki/MiSTer-FPGA
+[MiSTer setup]: https://github.com/ahmadexp/mt32-pi/wiki/MiSTer-FPGA%3A-Setup-and-usage
+[MT-32 synthesis]: https://github.com/ahmadexp/mt32-pi/wiki/MT-32-synthesis
+[mt32-pi wiki]: https://github.com/ahmadexp/mt32-pi/wiki
 [Munt]: https://github.com/munt/munt
-[Releases]: https://github.com/dwhinham/mt32-pi/releases
+[Releases]: https://github.com/ahmadexp/mt32-pi/releases
 [Roland GS]: https://en.wikipedia.org/wiki/Roland_GS
-[RTP-MIDI]: https://github.com/dwhinham/mt32-pi/wiki/Networking%3A-RTP-MIDI-%28AppleMIDI%29
-[Raw UDP socket]: https://github.com/dwhinham/mt32-pi/wiki/Networking%3A-UDP-MIDI
-[SD card preparation]: https://github.com/dwhinham/mt32-pi/wiki/SD-card-preparation
-[Serial port]: https://github.com/dwhinham/mt32-pi/wiki/MIDI-via-RS-232-or-USB-to-serial
-[SoundFont synthesis]: https://github.com/dwhinham/mt32-pi/wiki/SoundFont-synthesis
+[RTP-MIDI]: https://github.com/ahmadexp/mt32-pi/wiki/Networking%3A-RTP-MIDI-%28AppleMIDI%29
+[Raw UDP socket]: https://github.com/ahmadexp/mt32-pi/wiki/Networking%3A-UDP-MIDI
+[SD card preparation]: https://github.com/ahmadexp/mt32-pi/wiki/SD-card-preparation
+[Serial port]: https://github.com/ahmadexp/mt32-pi/wiki/MIDI-via-RS-232-or-USB-to-serial
+[SoundFont synthesis]: https://github.com/ahmadexp/mt32-pi/wiki/SoundFont-synthesis
 [SoundFont]: https://en.wikipedia.org/wiki/SoundFont
-[Updating mt32-pi]: https://github.com/dwhinham/mt32-pi/wiki/Updating-mt32-pi
-[USB MIDI interfaces]: https://github.com/dwhinham/mt32-pi/wiki/USB-MIDI-interfaces
+[Updating mt32-pi]: https://github.com/ahmadexp/mt32-pi/wiki/Updating-mt32-pi
+[USB MIDI interfaces]: https://github.com/ahmadexp/mt32-pi/wiki/USB-MIDI-interfaces
 [Yamaha XG]: https://en.wikipedia.org/wiki/Yamaha_XG
